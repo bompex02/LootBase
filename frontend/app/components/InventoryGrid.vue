@@ -10,9 +10,19 @@
           <h3 class="truncate text-sm font-semibold">{{ item.displayName }}</h3>
           <p class="mt-1 truncate text-xs text-zinc-500">{{ item.marketHashName }}</p>
         </div>
-        <span class="rounded-md bg-emerald-500/10 px-2 py-1 text-xs font-semibold text-emerald-300">
-          {{ formatCurrency(item.totalPrice, item.currency) }}
-        </span>
+        <button
+          type="button"
+          class="shrink-0 rounded-md bg-emerald-500/10 px-2 py-1 text-right text-xs font-semibold text-emerald-300 transition hover:bg-emerald-500/15 focus:outline-none focus:ring-2 focus:ring-emerald-400/50"
+          :title="isTotalPriceVisible(item) ? 'Stückpreis anzeigen' : 'Gesamtpreis anzeigen'"
+          @click="togglePriceMode(item)"
+        >
+          <span class="block leading-none">
+            {{ formatCurrency(displayedPrice(item), item.currency) }}
+          </span>
+          <span v-if="item.quantity > 1" class="mt-1 block text-[10px] font-medium text-emerald-200/70">
+            {{ isTotalPriceVisible(item) ? 'gesamt' : 'Stück' }}
+          </span>
+        </button>
       </div>
 
       <dl class="mt-4 grid grid-cols-2 gap-3 text-xs">
