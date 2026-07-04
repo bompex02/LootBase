@@ -78,9 +78,12 @@ public sealed class InventoryRefreshService(
             item.Exterior = asset.Exterior;
             item.Rarity = asset.Rarity;
             item.Quantity = Math.Max(1, asset.Quantity);
-            item.UnitPrice = price?.Amount ?? 0;
-            item.Currency = price?.Currency ?? "EUR";
-            item.LastPricedAt = price?.PricedAt;
+            if (price is not null)
+            {
+                item.UnitPrice = price.Amount;
+                item.Currency = price.Currency;
+                item.LastPricedAt = price.PricedAt;
+            }
 
             refreshedItems.Add(item);
         }
