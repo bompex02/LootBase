@@ -5,10 +5,12 @@ export const useApiBase = () => {
 
 export const useApiFetch = <T>(path: string, options = {}) => {
   const apiBase = useApiBase()
+  const headers = import.meta.server ? useRequestHeaders(['cookie']) : undefined
 
   return useFetch<T>(path, {
     baseURL: apiBase,
     credentials: 'include',
+    headers,
     ...options
   })
 }
