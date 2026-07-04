@@ -6,9 +6,15 @@
       class="rounded-md border border-zinc-800 bg-[#101821] p-4"
     >
       <div class="flex items-start justify-between gap-4">
-        <div class="min-w-0">
-          <h3 class="truncate text-sm font-semibold">{{ item.displayName }}</h3>
-          <p class="mt-1 truncate text-xs text-zinc-500">{{ item.marketHashName }}</p>
+        <div class="flex min-w-0 items-center gap-3">
+          <span class="flex size-14 shrink-0 items-center justify-center overflow-hidden rounded-md bg-zinc-800">
+            <img v-if="item.iconUrl" :src="item.iconUrl" :alt="item.displayName" class="size-full object-contain">
+            <UIcon v-else name="i-lucide-image-off" class="size-6 text-zinc-600" />
+          </span>
+          <div class="min-w-0">
+            <h3 class="truncate text-sm font-semibold">{{ item.displayName }}</h3>
+            <p class="mt-1 truncate text-xs text-zinc-500">{{ item.marketHashName }}</p>
+          </div>
         </div>
         <button
           type="button"
