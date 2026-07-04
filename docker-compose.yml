@@ -9,7 +9,7 @@ services:
     ports:
       - "5432:5432"
     volumes:
-      - lootbase-postgres:/var/lib/postgresql/data
+      - lootbase-postgres:/var/lib/postgresql
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U lootbase -d lootbase"]
       interval: 10s
