@@ -74,12 +74,6 @@ builder.Services.AddCors(options =>
 
 var app = builder.Build();
 
-if (app.Environment.IsDevelopment())
-{
-    app.MapOpenApi();
-    await DemoDataSeeder.SeedAsync(app.Services);
-}
-
 app.UseCors("frontend");
 app.UseAuthentication();
 app.UseAuthorization();
