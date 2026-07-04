@@ -80,6 +80,7 @@ app.UseAuthorization();
 
 app.MapHealthEndpoints();
 app.MapAuthEndpoints();
+app.MapPricingEndpoints();
 app.MapLeaderboardEndpoints();
 app.MapPlayerEndpoints();
 

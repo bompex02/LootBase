@@ -61,7 +61,7 @@ public static class ServiceCollectionExtensions
         services.AddHttpClient<ISteamOpenIdService, SteamOpenIdService>();
         services.AddHttpClient<ISteamProfileClient, SteamProfileClient>();
         services.AddHttpClient<IInventoryProvider, Cs2SteamInventoryProvider>();
-        services.AddHttpClient<IPricingProvider, SteamMarketPricingProvider>();
+        services.AddHttpClient<IPricingProvider, PricingProvider>();
 
         return services;
     }
