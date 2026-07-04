@@ -1,0 +1,16 @@
+{
+    "version": "2.0.0",
+    "tasks": [
+      {
+        "label": "build backend",
+        "type": "shell",
+        "command": "dotnet",
+        "args": [
+          "build",
+          "${workspaceFolder}/LootBase.sln",
+          "-m:1"
+        ],
+        "problemMatcher": "$msCompile"
+      }
+    ]
+  }
