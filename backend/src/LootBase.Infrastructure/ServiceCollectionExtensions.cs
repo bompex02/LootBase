@@ -40,11 +40,11 @@ public static class ServiceCollectionExtensions
         });
 
         services.AddScoped<IUserRepository, EfUserRepository>();
-        services.AddScoped<IInventoryProvider, Cs2DemoInventoryProvider>();
         services.AddScoped<IInventoryRefreshService, InventoryRefreshService>();
-        services.AddScoped<IPricingProvider, StaticPricingProvider>();
         services.AddHttpClient<ISteamOpenIdService, SteamOpenIdService>();
         services.AddHttpClient<ISteamProfileClient, SteamProfileClient>();
+        services.AddHttpClient<IInventoryProvider, Cs2SteamInventoryProvider>();
+        services.AddHttpClient<IPricingProvider, SteamMarketPricingProvider>();
 
         return services;
     }
