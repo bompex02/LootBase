@@ -19,19 +19,28 @@ public sealed class PlayerProfileService(IUserRepository users) : IPlayerProfile
 
         var currency = items.FirstOrDefault()?.Currency ?? "EUR";
         var topItems = items
+            .GroupBy(item => new { item.MarketHashName, item.Currency })
+            .Select(group =>
+            {
+                var representative = group.First();
+                var quantity = group.Sum(item => item.Quantity);
+                var totalPrice = group.Sum(item => item.TotalPrice);
+
+                return new InventoryItemDto(
+                    representative.AssetId,
+                    representative.MarketHashName,
+                    representative.DisplayName,
+                    representative.IconUrl,
+                    representative.Type,
+                    representative.Exterior,
+                    representative.Rarity,
+                    quantity,
+                    quantity == 0 ? 0 : totalPrice / quantity,
+                    totalPrice,
+                    representative.Currency);
+            })
+            .OrderByDescending(item => item.TotalPrice)
             .Take(20)
-            .Select(item => new InventoryItemDto(
-                item.AssetId,
-                item.MarketHashName,
-                item.DisplayName,
-                item.IconUrl,
-                item.Type,
-                item.Exterior,
-                item.Rarity,
-                item.Quantity,
-                item.UnitPrice,
-                item.TotalPrice,
-                item.Currency))
             .ToList();
 
         return new PlayerProfileDto(
