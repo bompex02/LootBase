@@ -43,4 +43,26 @@ import type { InventoryItem } from '~/types/api'
 defineProps<{
   items: InventoryItem[]
 }>()
+
+const totalPriceItemKeys = ref<Set<string>>(new Set())
+
+const getItemKey = (item: InventoryItem) => item.marketHashName || item.assetId
+
+const isTotalPriceVisible = (item: InventoryItem) => totalPriceItemKeys.value.has(getItemKey(item))
+
+const displayedPrice = (item: InventoryItem) =>
+  isTotalPriceVisible(item) ? item.totalPrice : item.unitPrice
+
+const togglePriceMode = (item: InventoryItem) => {
+  const key = getItemKey(item)
+  const nextKeys = new Set(totalPriceItemKeys.value)
+
+  if (nextKeys.has(key)) {
+    nextKeys.delete(key)
+  } else {
+    nextKeys.add(key)
+  }
+
+  totalPriceItemKeys.value = nextKeys
+}
 </script>

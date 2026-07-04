@@ -18,6 +18,7 @@ Der aktuelle Stand unterstützt CS2. Weitere Spiele und Preisquellen sind über 
 - Leaderboard nach Inventarwert
 - PostgreSQL-Unterstützung mit EF Core
 - EF-InMemory-Fallback für lokale Entwicklung ohne Datenbank
+- Redis-Cache für wiederkehrende Preisabfragen
 - Nuxt-Frontend mit serverseitigem Rendering und Cookie-Forwarding
 
 ## Architektur
@@ -45,6 +46,7 @@ Infrastructure
     |
     +-- Steam Inventory
     +-- Steam Market Pricing
+    +-- Redis Cache
     +-- EF Core Persistence
     |
     v
@@ -58,6 +60,7 @@ PostgreSQL oder EF InMemory
 | Backend | .NET 10, ASP.NET Core Minimal API |
 | ORM | Entity Framework Core 10 |
 | Datenbank | PostgreSQL 18 oder EF InMemory |
+| Cache | Redis oder Distributed Memory Cache |
 | Auth | Steam OpenID 2.0, ASP.NET Cookie Auth |
 | Frontend | Nuxt 4, Vue 3, TypeScript |
 | UI | Nuxt UI 4, Tailwind CSS 4, Nuxt Icon |
@@ -75,6 +78,7 @@ PostgreSQL oder EF InMemory
 │       └── LootBase.Infrastructure/  # EF Core, Steam, Pricing
 ├── frontend/                         # Nuxt App
 ├── docker-compose.yml                # PostgreSQL für lokale Entwicklung
+├── .env.example                      # lokale Environment-Variablen
 ├── Directory.Packages.props          # zentrale NuGet-Versionen
 └── LootBase.sln
 ```
@@ -84,7 +88,7 @@ PostgreSQL oder EF InMemory
 - .NET SDK 10
 - Node.js 22 oder neuer
 - npm
-- Docker optional für PostgreSQL
+- Docker optional für PostgreSQL und Redis
 - Öffentliches Steam-Inventar für echten Inventory Sync
 
 Steam-Inventar öffentlich setzen:
@@ -98,6 +102,11 @@ Steam Profil -> Profil bearbeiten -> Privatsphäre-Einstellungen -> Inventar -> 
 Backend:
 
 ```bash
+cp .env.example .env
+set -a
+. ./.env
+set +a
+
 dotnet build LootBase.sln -m:1
 dotnet run --project backend/src/LootBase.Api/LootBase.Api.csproj
 ```
@@ -106,7 +115,6 @@ Frontend:
 
 ```bash
 cd frontend
-cp .env.example .env
 npm ci
 npm run dev
 ```
@@ -122,9 +130,12 @@ Für Login und Cookies lokal konsequent `localhost` verwenden, nicht gemischt `l
 
 ## Konfiguration
 
+Lokale Runtime-Werte liegen in `.env`. Die Datei ist gitignored; `.env.example` dient als Vorlage.
+
 | Variable | Beschreibung |
 | --- | --- |
 | `ConnectionStrings__LootBase` | PostgreSQL Connection String. Leer bedeutet EF InMemory. |
+| `ConnectionStrings__Redis` | Redis Connection String. Leer bedeutet lokaler Distributed Memory Cache. |
 | `Steam__Realm` | OpenID Realm, lokal `http://localhost:5188/`. |
 | `Steam__ReturnUrl` | Backend Callback für Steam OpenID. |
 | `Steam__FrontendAuthSuccessUrl` | Ziel nach erfolgreichem Login. |
@@ -132,24 +143,46 @@ Für Login und Cookies lokal konsequent `localhost` verwenden, nicht gemischt `l
 | `Cors__AllowedOrigins__0` | Erlaubter Frontend-Origin. |
 | `NUXT_PUBLIC_API_BASE` | Backend-URL für das Nuxt-Frontend. |
 
-## PostgreSQL
+`.env` wird von ASP.NET Core nicht automatisch geladen. Für lokale Starts die Datei im Terminal exportieren:
+
+```bash
+set -a
+. ./.env
+set +a
+```
+
+## PostgreSQL und Redis
 
 Ohne Connection String nutzt das Backend EF InMemory. Damit kann die Anwendung ohne Datenbank gestartet werden; Daten gehen beim Neustart verloren.
 
-PostgreSQL starten:
+PostgreSQL und Redis starten:
 
 ```bash
-docker compose up -d postgres
+docker compose up -d postgres redis
 ```
 
-Backend mit PostgreSQL starten:
+Backend mit PostgreSQL und Redis starten:
 
 ```bash
-ConnectionStrings__LootBase="Host=localhost;Port=5432;Database=lootbase;Username=lootbase;Password=lootbase" \
+set -a
+. ./.env
+set +a
+
 dotnet run --project backend/src/LootBase.Api/LootBase.Api.csproj
 ```
 
 Im Development-Modus wird die Datenbank aktuell per `EnsureCreated` initialisiert. EF-Core-Migrations sind noch nicht eingerichtet.
+
+## Caching
+
+Redis wird für wiederkehrende Steam-Market-Preisabfragen genutzt. Der Cache-Key basiert auf App, Währung und Market Hash Name.
+
+| Inhalt | TTL |
+| --- | --- |
+| Erfolgreicher Steam-Market-Preis | 30 Minuten |
+| Fehlender oder fehlgeschlagener Preis | 2 Minuten |
+
+Wenn `ConnectionStrings__Redis` leer ist, nutzt das Backend automatisch einen lokalen Distributed Memory Cache.
 
 ## Steam Inventory
 
@@ -194,7 +227,7 @@ Aktuelle Implementierungen:
 | Provider | Aufgabe |
 | --- | --- |
 | `Cs2SteamInventoryProvider` | Liest öffentliche CS2-Inventare von Steam. |
-| `SteamMarketPricingProvider` | Liest Itempreise vom Steam Community Market. |
+| `SteamMarketPricingProvider` | Liest Itempreise vom Steam Community Market und cached sie. |
 
 Weitere Spiele oder Preisquellen können über zusätzliche Provider ergänzt werden.
 

@@ -3,27 +3,47 @@ using System.Globalization;
 using System.Text;
 using System.Text.Json;
 using LootBase.Application.Abstractions.Pricing;
+using Microsoft.Extensions.Caching.Distributed;
+using Microsoft.Extensions.Logging;
 
 namespace LootBase.Infrastructure.Pricing;
 
-public sealed class SteamMarketPricingProvider(HttpClient httpClient) : IPricingProvider
+public sealed class SteamMarketPricingProvider(
+    HttpClient httpClient,
+    IDistributedCache distributedCache,
+    ILogger<SteamMarketPricingProvider> logger) : IPricingProvider
 {
     private static readonly TimeSpan CacheDuration = TimeSpan.FromMinutes(30);
-    private static readonly ConcurrentDictionary<string, CachedPrice> Cache = new();
+    private static readonly TimeSpan MissingPriceCacheDuration = TimeSpan.FromMinutes(2);
+    private static readonly JsonSerializerOptions JsonOptions = new(JsonSerializerDefaults.Web);
+    private static readonly ConcurrentDictionary<string, CachedPrice> MemoryCache = new(StringComparer.OrdinalIgnoreCase);
 
     public async Task<PriceQuote?> GetPriceAsync(
         string marketHashName,
         string currency,
         CancellationToken cancellationToken)
     {
-        var cacheKey = $"{currency}:{marketHashName}";
-        if (Cache.TryGetValue(cacheKey, out var cachedPrice) &&
+        var normalizedCurrency = currency.ToUpperInvariant();
+        var cacheKey = GetCacheKey(marketHashName, normalizedCurrency);
+        if (MemoryCache.TryGetValue(cacheKey, out var cachedPrice) &&
             cachedPrice.ExpiresAt > DateTimeOffset.UtcNow)
         {
             return cachedPrice.Price;
         }
 
-        var currencyCode = GetSteamCurrencyCode(currency);
+        var distributedPrice = await ReadDistributedCacheAsync(cacheKey, cancellationToken);
+        if (distributedPrice.Found)
+        {
+            MemoryCache[cacheKey] = new CachedPrice(
+                distributedPrice.Price,
+                DateTimeOffset.UtcNow.Add(distributedPrice.Price is null
+                    ? MissingPriceCacheDuration
+                    : CacheDuration));
+
+            return distributedPrice.Price;
+        }
+
+        var currencyCode = GetSteamCurrencyCode(normalizedCurrency);
         var requestUri =
             $"https://steamcommunity.com/market/priceoverview/?appid=730&currency={currencyCode}&market_hash_name={Uri.EscapeDataString(marketHashName)}";
 
@@ -34,7 +54,12 @@ public sealed class SteamMarketPricingProvider(HttpClient httpClient) : IPricing
         using var response = await httpClient.SendAsync(request, cancellationToken);
         if (!response.IsSuccessStatusCode)
         {
-            Cache[cacheKey] = new CachedPrice(null, DateTimeOffset.UtcNow.AddMinutes(2));
+            logger.LogWarning(
+                "Steam Market pricing request failed with status code {StatusCode} for {MarketHashName}.",
+                (int)response.StatusCode,
+                marketHashName);
+
+            await CachePriceAsync(cacheKey, null, MissingPriceCacheDuration, cancellationToken);
             return null;
         }
 
@@ -45,7 +70,7 @@ public sealed class SteamMarketPricingProvider(HttpClient httpClient) : IPricing
         if (root.TryGetProperty("success", out var successElement) &&
             successElement.ValueKind == JsonValueKind.False)
         {
-            Cache[cacheKey] = new CachedPrice(null, DateTimeOffset.UtcNow.AddMinutes(2));
+            await CachePriceAsync(cacheKey, null, MissingPriceCacheDuration, cancellationToken);
             return null;
         }
 
@@ -53,19 +78,98 @@ public sealed class SteamMarketPricingProvider(HttpClient httpClient) : IPricing
             ReadOptionalString(root, "median_price");
         if (!TryParseSteamPrice(priceText, out var amount))
         {
-            Cache[cacheKey] = new CachedPrice(null, DateTimeOffset.UtcNow.AddMinutes(2));
+            await CachePriceAsync(cacheKey, null, MissingPriceCacheDuration, cancellationToken);
             return null;
         }
 
         var quote = new PriceQuote(
             marketHashName,
             amount,
-            currency.ToUpperInvariant(),
+            normalizedCurrency,
             "steam-community-market",
             DateTimeOffset.UtcNow);
-        Cache[cacheKey] = new CachedPrice(quote, DateTimeOffset.UtcNow.Add(CacheDuration));
+
+        await CachePriceAsync(cacheKey, quote, CacheDuration, cancellationToken);
 
         return quote;
+    }
+
+    private async Task<(bool Found, PriceQuote? Price)> ReadDistributedCacheAsync(
+        string cacheKey,
+        CancellationToken cancellationToken)
+    {
+        try
+        {
+            var cachedJson = await distributedCache.GetStringAsync(cacheKey, cancellationToken);
+            if (string.IsNullOrWhiteSpace(cachedJson))
+            {
+                return (false, null);
+            }
+
+            var cachedPrice = JsonSerializer.Deserialize<CachedPriceDto>(cachedJson, JsonOptions);
+            if (cachedPrice is null)
+            {
+                return (false, null);
+            }
+
+            if (!cachedPrice.HasPrice)
+            {
+                return (true, null);
+            }
+
+            return (true, new PriceQuote(
+                cachedPrice.MarketHashName,
+                cachedPrice.Amount,
+                cachedPrice.Currency,
+                cachedPrice.Source,
+                cachedPrice.PricedAt));
+        }
+        catch (Exception ex)
+        {
+            logger.LogWarning(ex, "Reading Steam Market price from distributed cache failed.");
+            return (false, null);
+        }
+    }
+
+    private async Task CachePriceAsync(
+        string cacheKey,
+        PriceQuote? price,
+        TimeSpan duration,
+        CancellationToken cancellationToken)
+    {
+        MemoryCache[cacheKey] = new CachedPrice(price, DateTimeOffset.UtcNow.Add(duration));
+
+        try
+        {
+            var cachedPrice = price is null
+                ? CachedPriceDto.Missing
+                : new CachedPriceDto(
+                    true,
+                    price.MarketHashName,
+                    price.Amount,
+                    price.Currency,
+                    price.Source,
+                    price.PricedAt);
+
+            var cachedJson = JsonSerializer.Serialize(cachedPrice, JsonOptions);
+            await distributedCache.SetStringAsync(
+                cacheKey,
+                cachedJson,
+                new DistributedCacheEntryOptions
+                {
+                    AbsoluteExpirationRelativeToNow = duration
+                },
+                cancellationToken);
+        }
+        catch (Exception ex)
+        {
+            logger.LogWarning(ex, "Writing Steam Market price to distributed cache failed.");
+        }
+    }
+
+    private static string GetCacheKey(string marketHashName, string currency)
+    {
+        return $"pricing:steam-market:730:{currency}:{Convert.ToHexString(Encoding.UTF8.GetBytes(marketHashName)).ToLowerInvariant()}:v1";
     }
 
     private static int GetSteamCurrencyCode(string currency)
@@ -126,4 +230,21 @@ public sealed class SteamMarketPricingProvider(HttpClient httpClient) : IPricing
     }
 
     private sealed record CachedPrice(PriceQuote? Price, DateTimeOffset ExpiresAt);
+
+    private sealed record CachedPriceDto(
+        bool HasPrice,
+        string MarketHashName,
+        decimal Amount,
+        string Currency,
+        string Source,
+        DateTimeOffset PricedAt)
+    {
+        public static CachedPriceDto Missing { get; } = new(
+            false,
+            string.Empty,
+            0,
+            string.Empty,
+            string.Empty,
+            DateTimeOffset.UnixEpoch);
+    }
 }

@@ -19,6 +19,10 @@ public static class ServiceCollectionExtensions
         IConfiguration configuration)
     {
         var connectionString = configuration.GetConnectionString("LootBase");
+        var redisConnectionString =
+            configuration.GetConnectionString("Redis") ??
+            configuration["Redis:ConnectionString"];
+
         services.AddDbContext<LootBaseDbContext>(options =>
         {
             if (string.IsNullOrWhiteSpace(connectionString))
@@ -38,6 +42,19 @@ public static class ServiceCollectionExtensions
                 configuration["Steam:FrontendAuthSuccessUrl"] ?? options.FrontendAuthSuccessUrl;
             options.WebApiKey = configuration["Steam:WebApiKey"];
         });
+
+        if (string.IsNullOrWhiteSpace(redisConnectionString))
+        {
+            services.AddDistributedMemoryCache();
+        }
+        else
+        {
+            services.AddStackExchangeRedisCache(options =>
+            {
+                options.Configuration = redisConnectionString;
+                options.InstanceName = "lootbase:";
+            });
+        }
 
         services.AddScoped<IUserRepository, EfUserRepository>();
         services.AddScoped<IInventoryRefreshService, InventoryRefreshService>();
