@@ -22,6 +22,12 @@ export default defineNuxtConfig({
       colors: ['primary', 'neutral', 'success', 'warning', 'error']
     }
   },
+  icon: {
+    localApiEndpoint: '/_nuxt_icon',
+    serverBundle: {
+      collections: ['lucide']
+    }
+  },
   typescript: {
     typeCheck: true,
     strict: true
