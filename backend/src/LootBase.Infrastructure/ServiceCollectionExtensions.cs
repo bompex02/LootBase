@@ -1,3 +1,4 @@
+using System.Net;
 using LootBase.Application.Abstractions.Auth;
 using LootBase.Application.Abstractions.Inventory;
 using LootBase.Application.Abstractions.Persistence;
@@ -61,7 +62,12 @@ public static class ServiceCollectionExtensions
         services.AddHttpClient<ISteamOpenIdService, SteamOpenIdService>();
         services.AddHttpClient<ISteamProfileClient, SteamProfileClient>();
         services.AddHttpClient<IInventoryProvider, Cs2SteamInventoryProvider>();
-        services.AddHttpClient<IPricingProvider, PricingProvider>();
+        services.AddHttpClient<IPricingCatalog, PricingProvider>()
+            .ConfigurePrimaryHttpMessageHandler(() => new HttpClientHandler
+            {
+                AutomaticDecompression = DecompressionMethods.All
+            });
+        services.AddScoped<IPricingProvider>(sp => sp.GetRequiredService<IPricingCatalog>());
 
         return services;
     }
