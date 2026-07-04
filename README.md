@@ -1,48 +1,99 @@
 # LootBase
 
-LootBase is a starter monorepo for comparing Counter-Strike 2 inventory values through Steam login, player profiles, and a leaderboard.
+![.NET](https://img.shields.io/badge/.NET-10-512BD4?logo=dotnet&logoColor=white)
+![Nuxt](https://img.shields.io/badge/Nuxt-4-00DC82?logo=nuxt&logoColor=white)
+![PostgreSQL](https://img.shields.io/badge/PostgreSQL-18-4169E1?logo=postgresql&logoColor=white)
+![TypeScript](https://img.shields.io/badge/TypeScript-6-3178C6?logo=typescript&logoColor=white)
 
-## Current Stack
+LootBase ist eine Full-Stack-Webanwendung zum Vergleichen von Counter-Strike-2-Inventarwerten. Nutzer melden sich per Steam an, synchronisieren ihr öffentliches CS2-Inventar und erscheinen anschließend im Leaderboard.
 
-Checked on 2026-07-03:
+Der aktuelle Stand unterstützt CS2. Weitere Spiele und Preisquellen sind über Provider-Strukturen vorbereitet.
 
-| Area | Version |
-| --- | --- |
-| Backend | .NET 10 LTS / ASP.NET Core 10 |
-| EF Core | 10.0.9 |
-| PostgreSQL provider | Npgsql.EntityFrameworkCore.PostgreSQL 10.0.2 |
-| Database target | PostgreSQL 18 |
-| Frontend | Nuxt 4.4.8 |
-| UI | Nuxt UI 4.9.0 |
-| Styling | Tailwind CSS 4.3.2 |
-| TypeScript | 6.0.3 |
-| Vue | 3.5.39 |
-| Node | >= 22, Node 24 LTS recommended for deploys |
+## Funktionen
 
-Sources used for the version decisions:
+- Steam Login über OpenID 2.0
+- Abruf öffentlicher CS2-Inventare über Steam Community Inventory
+- Preisermittlung über Steam Community Market
+- Profilseite mit Inventarwert, Itemanzahl und Top-Items
+- Leaderboard nach Inventarwert
+- PostgreSQL-Unterstützung mit EF Core
+- EF-InMemory-Fallback für lokale Entwicklung ohne Datenbank
+- Nuxt-Frontend mit serverseitigem Rendering und Cookie-Forwarding
 
-- .NET download/support: https://dotnet.microsoft.com/en-us/download/dotnet
-- .NET support policy: https://dotnet.microsoft.com/en-us/platform/support/policy/dotnet-core
-- Nuxt 4 docs: https://nuxt.com/docs/4.x/getting-started/installation
-- Nuxt 4 release: https://nuxt.com/blog/v4
-- Nuxt UI docs: https://ui.nuxt.com/docs/getting-started/installation/nuxt
-- Tailwind Nuxt guide: https://tailwindcss.com/docs/installation/framework-guides/nuxt
-- Node release schedule: https://nodejs.org/en/about/previous-releases
-- PostgreSQL versioning: https://www.postgresql.org/support/versioning/
-
-## Structure
+## Architektur
 
 ```text
-backend/src/LootBase.Api             ASP.NET Core minimal API
-backend/src/LootBase.Application     use cases, DTOs, service contracts
-backend/src/LootBase.Domain          domain entities and game constants
-backend/src/LootBase.Infrastructure  EF Core, Steam, pricing, inventory providers
-frontend/                            Nuxt 4 app
+Nuxt Frontend
+    |
+    | HTTP / HttpOnly Cookie
+    v
+ASP.NET Core API
+    |
+    +-- Auth Endpoints
+    +-- Player Endpoints
+    +-- Leaderboard Endpoints
+    |
+    v
+Application
+    |
+    +-- Inventory Refresh
+    +-- Player Profiles
+    +-- Leaderboard
+    |
+    v
+Infrastructure
+    |
+    +-- Steam Inventory
+    +-- Steam Market Pricing
+    +-- EF Core Persistence
+    |
+    v
+PostgreSQL oder EF InMemory
 ```
 
-CS2 is currently the first inventory provider. The interfaces are already game/provider based, so Dota, Rust, TF2, or another price source can be added without changing the frontend contract.
+## Tech Stack
 
-## Local Run
+| Bereich | Technologie |
+| --- | --- |
+| Backend | .NET 10, ASP.NET Core Minimal API |
+| ORM | Entity Framework Core 10 |
+| Datenbank | PostgreSQL 18 oder EF InMemory |
+| Auth | Steam OpenID 2.0, ASP.NET Cookie Auth |
+| Frontend | Nuxt 4, Vue 3, TypeScript |
+| UI | Nuxt UI 4, Tailwind CSS 4, Nuxt Icon |
+| APIs | Steam Community Inventory, Steam Community Market |
+
+## Projektstruktur
+
+```text
+.
+├── backend/
+│   └── src/
+│       ├── LootBase.Api/             # API, Auth, Endpoints
+│       ├── LootBase.Application/     # Services, DTOs, Interfaces
+│       ├── LootBase.Domain/          # Entities und Konstanten
+│       └── LootBase.Infrastructure/  # EF Core, Steam, Pricing
+├── frontend/                         # Nuxt App
+├── docker-compose.yml                # PostgreSQL für lokale Entwicklung
+├── Directory.Packages.props          # zentrale NuGet-Versionen
+└── LootBase.sln
+```
+
+## Voraussetzungen
+
+- .NET SDK 10
+- Node.js 22 oder neuer
+- npm
+- Docker optional für PostgreSQL
+- Öffentliches Steam-Inventar für echten Inventory Sync
+
+Steam-Inventar öffentlich setzen:
+
+```text
+Steam Profil -> Profil bearbeiten -> Privatsphäre-Einstellungen -> Inventar -> Öffentlich
+```
+
+## Lokaler Start
 
 Backend:
 
@@ -55,59 +106,163 @@ Frontend:
 
 ```bash
 cd frontend
-npm install
+cp .env.example .env
+npm ci
 npm run dev
 ```
 
-Open http://localhost:3000. The API listens on http://localhost:5188.
+Standard-URLs:
 
-Without a `ConnectionStrings__LootBase` value, the API uses EF Core InMemory and seeds demo leaderboard data.
+| Anwendung | URL |
+| --- | --- |
+| Frontend | `http://localhost:3000` |
+| Backend | `http://localhost:5188` |
+
+Für Login und Cookies lokal konsequent `localhost` verwenden, nicht gemischt `localhost` und `127.0.0.1`.
+
+## Konfiguration
+
+| Variable | Beschreibung |
+| --- | --- |
+| `ConnectionStrings__LootBase` | PostgreSQL Connection String. Leer bedeutet EF InMemory. |
+| `Steam__Realm` | OpenID Realm, lokal `http://localhost:5188/`. |
+| `Steam__ReturnUrl` | Backend Callback für Steam OpenID. |
+| `Steam__FrontendAuthSuccessUrl` | Ziel nach erfolgreichem Login. |
+| `Steam__WebApiKey` | Optionaler Steam Web API Key für Profildaten. |
+| `Cors__AllowedOrigins__0` | Erlaubter Frontend-Origin. |
+| `NUXT_PUBLIC_API_BASE` | Backend-URL für das Nuxt-Frontend. |
 
 ## PostgreSQL
 
-Start PostgreSQL:
+Ohne Connection String nutzt das Backend EF InMemory. Damit kann die Anwendung ohne Datenbank gestartet werden; Daten gehen beim Neustart verloren.
+
+PostgreSQL starten:
 
 ```bash
 docker compose up -d postgres
 ```
 
-Use this connection string when you want real persistence:
+Backend mit PostgreSQL starten:
 
 ```bash
-ConnectionStrings__LootBase="Host=localhost;Port=5432;Database=lootbase;Username=lootbase;Password=lootbase"
+ConnectionStrings__LootBase="Host=localhost;Port=5432;Database=lootbase;Username=lootbase;Password=lootbase" \
+dotnet run --project backend/src/LootBase.Api/LootBase.Api.csproj
 ```
 
-Migrations are intentionally not generated yet. The current dev path uses `EnsureCreated` for the initial model; switch to migrations before production.
+Im Development-Modus wird die Datenbank aktuell per `EnsureCreated` initialisiert. EF-Core-Migrations sind noch nicht eingerichtet.
 
-## Steam
+## Steam Inventory
 
-Steam OpenID is wired through:
+LootBase liest CS2-Inventare über den öffentlichen Steam-Inventory-Endpunkt:
 
 ```text
-GET /api/auth/steam/login
-GET /api/auth/steam/callback
-POST /api/auth/logout
+https://steamcommunity.com/inventory/{steamId64}/730/2?l=english&count=5000
 ```
 
-Set these values for a real Steam login flow:
+Für CS2 gilt:
 
-```bash
-Steam__Realm="http://localhost:5188/"
-Steam__ReturnUrl="http://localhost:5188/api/auth/steam/callback"
-Steam__FrontendAuthSuccessUrl="http://localhost:3000/me"
-Steam__WebApiKey="your-steam-web-api-key"
-```
-
-The app currently uses a demo CS2 inventory provider and a static pricing provider. Replace `Cs2DemoInventoryProvider` and `StaticPricingProvider` with Steam inventory and Skinport/CSFloat/Buff providers when moving beyond the scaffold.
+- `appid = 730`
+- `contextid = 2`
 
 ## API
 
-```text
-GET  /api/health
-GET  /api/leaderboard?appId=730&limit=50
-GET  /api/players/{steamId64}
-GET  /api/me
-POST /api/me/inventory/refresh
+| Methode | Route | Beschreibung |
+| --- | --- | --- |
+| `GET` | `/api/health` | Healthcheck |
+| `GET` | `/api/auth/steam/login` | Startet den Steam Login |
+| `GET` | `/api/auth/steam/callback` | Callback nach Steam OpenID |
+| `POST` | `/api/auth/logout` | Beendet die Session |
+| `GET` | `/api/leaderboard?appId=730&limit=50` | Leaderboard |
+| `GET` | `/api/players/{steamId64}` | Öffentliches Spielerprofil |
+| `GET` | `/api/me` | Eigenes Profil, Auth erforderlich |
+| `POST` | `/api/me/inventory/refresh` | Synchronisiert das eigene Inventar |
+
+## Datenmodell
+
+| Entity | Zweck |
+| --- | --- |
+| `User` | SteamID64, Anzeigename, Avatar, Login- und Sync-Metadaten |
+| `InventoryItem` | Steam Asset, Market Hash Name, Itemdaten und Preis |
+| `InventorySnapshot` | Gesamtwert eines Inventars zu einem Zeitpunkt |
+
+Der Inventory Sync speichert die aktuellen Items eines Nutzers und erzeugt pro Refresh einen Snapshot.
+
+## Provider
+
+Aktuelle Implementierungen:
+
+| Provider | Aufgabe |
+| --- | --- |
+| `Cs2SteamInventoryProvider` | Liest öffentliche CS2-Inventare von Steam. |
+| `SteamMarketPricingProvider` | Liest Itempreise vom Steam Community Market. |
+
+Weitere Spiele oder Preisquellen können über zusätzliche Provider ergänzt werden.
+
+## Entwicklung
+
+Backend builden:
+
+```bash
+dotnet build LootBase.sln -m:1
 ```
 
-Authenticated endpoints use an HttpOnly cookie issued after Steam OpenID verification.
+Frontend prüfen:
+
+```bash
+cd frontend
+npm run typecheck
+npm run build
+```
+
+Audit:
+
+```bash
+cd frontend
+npm audit
+```
+
+Ports freigeben:
+
+```bash
+lsof -ti :5188 | xargs -r kill
+lsof -ti :3000 | xargs -r kill
+```
+
+## Debugging in VS Code
+
+1. Repository in VS Code öffnen.
+2. C# Dev Kit installieren.
+3. Backend builden.
+4. In `Run and Debug` eine C#/.NET-Konfiguration für `LootBase.Api` verwenden.
+5. Breakpoint in einem Endpoint setzen.
+6. Request über Browser, Frontend oder HTTP-Client auslösen.
+
+Bei manueller `launch.json` zeigt `program` auf:
+
+```text
+backend/src/LootBase.Api/bin/Debug/net10.0/LootBase.Api.dll
+```
+
+## Einschränkungen
+
+- Nur öffentliche Steam-Inventare können gelesen werden.
+- Steam Market Pricing kann rate-limitiert werden.
+- Nicht jedes Item hat jederzeit einen verfügbaren Marktpreis.
+- EF-Core-Migrations sind noch nicht eingerichtet.
+- Automatische periodische Inventory Syncs sind noch nicht implementiert.
+- Aktuell ist nur CS2 angebunden.
+
+## Roadmap
+
+- EF-Core-Migrations
+- Background Worker für regelmäßige Inventory Syncs
+- Persistenter Pricing-Cache
+- Zusätzlicher Pricing Provider, z. B. Skinport oder CSFloat
+- Verlauf des Inventarwerts
+- Freundeslisten und private Leaderboards
+- Tests für Services, Provider und API-Endpunkte
+- Dockerfile und Deployment-Konfiguration
+
+## Lizenz
+
+Aktuell ist keine Lizenz hinterlegt.
