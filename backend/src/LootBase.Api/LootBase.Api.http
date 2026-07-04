@@ -1,0 +1,11 @@
+@LootBase.Api_HostAddress = http://localhost:5188
+
+GET {{LootBase.Api_HostAddress}}/api/health
+Accept: application/json
+
+###
+
+GET {{LootBase.Api_HostAddress}}/api/leaderboard
+Accept: application/json
+
+###

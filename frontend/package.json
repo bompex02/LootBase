@@ -1,0 +1,30 @@
+{
+  "name": "lootbase-frontend",
+  "type": "module",
+  "private": true,
+  "packageManager": "npm@10.9.7",
+  "engines": {
+    "node": ">=22.0.0"
+  },
+  "scripts": {
+    "dev": "nuxt dev --host 0.0.0.0 --port 3000",
+    "build": "nuxt build",
+    "generate": "nuxt generate",
+    "preview": "nuxt preview",
+    "typecheck": "nuxt typecheck"
+  },
+  "dependencies": {
+    "@nuxt/ui": "^4.9.0",
+    "nuxt": "^4.4.8",
+    "tailwindcss": "^4.3.2"
+  },
+  "overrides": {
+    "esbuild": "0.28.1"
+  },
+  "devDependencies": {
+    "@iconify-json/lucide": "^1.2.116",
+    "@types/node": "^26.1.0",
+    "typescript": "^6.0.3",
+    "vue-tsc": "^3.3.6"
+  }
+}

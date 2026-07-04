@@ -1,0 +1,16 @@
+@import "tailwindcss";
+@import "@nuxt/ui";
+
+:root {
+  color-scheme: dark;
+}
+
+body {
+  margin: 0;
+  background: #0b0f14;
+}
+
+button,
+a {
+  -webkit-tap-highlight-color: transparent;
+}

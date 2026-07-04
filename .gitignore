@@ -1,0 +1,27 @@
+# .NET
+bin/
+obj/
+TestResults/
+*.user
+*.suo
+
+# Nuxt / Node
+node_modules/
+.nuxt/
+.output/
+.data/
+.vercel/
+dist/
+coverage/
+
+# Local config
+.env
+.env.*
+!.env.example
+
+# Logs
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
