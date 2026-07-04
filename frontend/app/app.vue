@@ -18,7 +18,15 @@
             <UButton to="/me" variant="ghost" color="neutral" icon="i-lucide-user">
               Mein Profil
             </UButton>
-            <UButton :to="`${apiBase}/api/auth/steam/login`" external color="primary" icon="i-lucide-log-in">
+
+            <NuxtLink v-if="profile" to="/me" class="flex items-center gap-2 rounded-md border border-zinc-800 bg-[#101821] py-1 pl-1 pr-3">
+              <span class="flex size-7 items-center justify-center overflow-hidden rounded-full bg-zinc-800">
+                <img v-if="profile.avatarUrl" :src="profile.avatarUrl" :alt="profile.personaName" class="size-full object-cover">
+                <span v-else class="text-xs font-semibold">{{ getInitials(profile.personaName) }}</span>
+              </span>
+              <span class="max-w-32 truncate text-sm font-medium">{{ profile.personaName }}</span>
+            </NuxtLink>
+            <UButton v-else :to="`${apiBase}/api/auth/steam/login`" external color="primary" icon="i-lucide-log-in">
               Mit Steam anmelden
             </UButton>
           </nav>
@@ -34,4 +42,6 @@
 
 <script setup lang="ts">
 const apiBase = useApiBase()
+const { data: profileResponse } = await useApiFetch<unknown>('/api/me')
+const profile = computed(() => isPlayerProfile(profileResponse.value) ? profileResponse.value : null)
 </script>
