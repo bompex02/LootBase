@@ -15,9 +15,6 @@
             <UButton to="/" variant="ghost" color="neutral" icon="i-lucide-trophy">
               Leaderboard
             </UButton>
-            <UButton to="/me" variant="ghost" color="neutral" icon="i-lucide-user">
-              Mein Profil
-            </UButton>
 
             <NuxtLink v-if="profile" to="/me" class="flex items-center gap-2 rounded-md border border-zinc-800 bg-[#101821] py-1 pl-1 pr-3">
               <span class="flex size-7 items-center justify-center overflow-hidden rounded-full bg-zinc-800">
