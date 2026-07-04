@@ -13,10 +13,10 @@ Der aktuelle Stand unterstützt CS2. Weitere Spiele und Preisquellen sind über 
 
 - Steam Login über OpenID 2.0
 - Abruf öffentlicher CS2-Inventare über Steam Community Inventory
-- Preisermittlung über Steam Community Market
+- Preisermittlung über die Skinport API
 - Profilseite mit Inventarwert, Itemanzahl und Top-Items
 - Leaderboard nach Inventarwert
-- PostgreSQL-Unterstützung mit EF Core
+- PostgreSQL-Unterstützung mit EF Core und Migrations
 - EF-InMemory-Fallback für lokale Entwicklung ohne Datenbank
 - Redis-Cache für wiederkehrende Preisabfragen
 - Nuxt-Frontend mit serverseitigem Rendering und Cookie-Forwarding
@@ -45,7 +45,7 @@ Application
 Infrastructure
     |
     +-- Steam Inventory
-    +-- Steam Market Pricing
+    +-- Skinport Pricing
     +-- Redis Cache
     +-- EF Core Persistence
     |
@@ -64,7 +64,7 @@ PostgreSQL oder EF InMemory
 | Auth | Steam OpenID 2.0, ASP.NET Cookie Auth |
 | Frontend | Nuxt 4, Vue 3, TypeScript |
 | UI | Nuxt UI 4, Tailwind CSS 4, Nuxt Icon |
-| APIs | Steam Community Inventory, Steam Community Market |
+| APIs | Steam Community Inventory, Skinport |
 
 ## Projektstruktur
 
@@ -171,16 +171,18 @@ set +a
 dotnet run --project backend/src/LootBase.Api/LootBase.Api.csproj
 ```
 
-Im Development-Modus wird die Datenbank aktuell per `EnsureCreated` initialisiert. EF-Core-Migrations sind noch nicht eingerichtet.
+Beim Start wendet das Backend ausstehende EF-Core-Migrations automatisch an (`Database.Migrate()`), sofern eine relationale Connection String gesetzt ist. Neue Migration nach Modelländerungen erzeugen:
+
+```bash
+dotnet ef migrations add <Name> \
+  --project backend/src/LootBase.Infrastructure/LootBase.Infrastructure.csproj \
+  --startup-project backend/src/LootBase.Api/LootBase.Api.csproj \
+  --output-dir Persistence/Migrations
+```
 
 ## Caching
 
-Redis wird für wiederkehrende Steam-Market-Preisabfragen genutzt. Der Cache-Key basiert auf App, Währung und Market Hash Name.
-
-| Inhalt | TTL |
-| --- | --- |
-| Erfolgreicher Steam-Market-Preis | 30 Minuten |
-| Fehlender oder fehlgeschlagener Preis | 2 Minuten |
+Redis cached den kompletten Skinport-Preiskatalog pro Währung, 15 Minuten TTL, zusätzlich zu einem In-Process-Memory-Cache.
 
 Wenn `ConnectionStrings__Redis` leer ist, nutzt das Backend automatisch einen lokalen Distributed Memory Cache.
 
@@ -209,6 +211,8 @@ Für CS2 gilt:
 | `GET` | `/api/players/{steamId64}` | Öffentliches Spielerprofil |
 | `GET` | `/api/me` | Eigenes Profil, Auth erforderlich |
 | `POST` | `/api/me/inventory/refresh` | Synchronisiert das eigene Inventar |
+| `GET` | `/api/pricing/items?marketHashNames=...&currency=EUR` | Preise für mehrere Items |
+| `GET` | `/api/pricing/items/{marketHashName}?currency=EUR` | Preis für ein Item |
 
 ## Datenmodell
 
@@ -227,7 +231,7 @@ Aktuelle Implementierungen:
 | Provider | Aufgabe |
 | --- | --- |
 | `Cs2SteamInventoryProvider` | Liest öffentliche CS2-Inventare von Steam. |
-| `SteamMarketPricingProvider` | Liest Itempreise vom Steam Community Market und cached sie. |
+| `PricingProvider` | Liest den Skinport-Preiskatalog und cached ihn. |
 
 Weitere Spiele oder Preisquellen können über zusätzliche Provider ergänzt werden.
 
@@ -279,18 +283,15 @@ backend/src/LootBase.Api/bin/Debug/net10.0/LootBase.Api.dll
 ## Einschränkungen
 
 - Nur öffentliche Steam-Inventare können gelesen werden.
-- Steam Market Pricing kann rate-limitiert werden.
+- Skinport Pricing kann rate-limitiert werden.
 - Nicht jedes Item hat jederzeit einen verfügbaren Marktpreis.
-- EF-Core-Migrations sind noch nicht eingerichtet.
 - Automatische periodische Inventory Syncs sind noch nicht implementiert.
 - Aktuell ist nur CS2 angebunden.
 
 ## Roadmap
 
-- EF-Core-Migrations
 - Background Worker für regelmäßige Inventory Syncs
-- Persistenter Pricing-Cache
-- Zusätzlicher Pricing Provider, z. B. Skinport oder CSFloat
+- Zusätzlicher Pricing Provider, z. B. CSFloat
 - Verlauf des Inventarwerts
 - Freundeslisten und private Leaderboards
 - Tests für Services, Provider und API-Endpunkte
