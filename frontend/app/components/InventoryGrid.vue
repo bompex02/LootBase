@@ -36,4 +36,9 @@ const togglePriceMode = (item: InventoryItem) => {
 
   totalPriceItemKeys.value = nextKeys
 }
+
+const handleSelect = (item: InventoryItem) => {
+  useState<InventoryItem | null>('selected-inventory-item').value = item
+  navigateTo(`/items/${encodeURIComponent(item.marketHashName)}`)
+}
 </script>

@@ -42,6 +42,25 @@ export const formatDateTime = (value?: string | null) => {
   }).format(new Date(value))
 }
 
+const RARITY_COLORS: Record<string, string> = {
+  'consumer grade': '#b0c3d9',
+  'industrial grade': '#5e98d9',
+  'mil-spec grade': '#4b69ff',
+  'restricted': '#8847ff',
+  'classified': '#d32ce6',
+  'covert': '#eb4b4b',
+  'contraband': '#e4ae39',
+  'extraordinary': '#e4ae39'
+}
+
+export const getRarityColor = (rarity?: string | null) => {
+  if (!rarity) {
+    return '#71717a'
+  }
+
+  return RARITY_COLORS[rarity.trim().toLowerCase()] ?? '#71717a'
+}
+
 export const isPlayerProfile = (value: unknown): value is import('~/types/api').PlayerProfile => {
   if (!value || typeof value !== 'object') {
     return false
