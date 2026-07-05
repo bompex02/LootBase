@@ -4,7 +4,7 @@
       <UButton to="/" variant="ghost" color="neutral" icon="i-lucide-arrow-left">
         Zurueck
       </UButton>
-      <UButton :disabled="!profile" :loading="refreshing" color="neutral" variant="soft" icon="i-lucide-refresh-cw" @click="refreshInventory">
+      <UButton v-if="isOwnProfile" class="cursor-pointer" :disabled="!profile" :loading="refreshing" color="neutral" variant="soft" icon="i-lucide-refresh-cw" @click="refreshInventory">
         Inventar syncen
       </UButton>
     </div>
@@ -57,6 +57,8 @@
 const route = useRoute()
 const steamId64 = computed(() => String(route.params.steamId64))
 const apiBase = useApiBase()
+const currentSteamId = useCurrentSteamId()
+const isOwnProfile = computed(() => !!currentSteamId.value && currentSteamId.value === steamId64.value)
 const refreshing = ref(false)
 
 const { data: profileResponse, error, refresh } = await useApiFetch<unknown>(
@@ -68,7 +70,7 @@ const profile = computed(() => isPlayerProfile(profileResponse.value) ? profileR
 const refreshInventory = async () => {
   refreshing.value = true
   try {
-    await $fetch('/api/me/inventory/refresh', {
+    await $fetch(`/api/players/${steamId64.value}/inventory/refresh`, {
       baseURL: apiBase,
       method: 'POST',
       credentials: 'include'

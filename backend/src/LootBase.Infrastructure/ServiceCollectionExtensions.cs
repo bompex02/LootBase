@@ -39,8 +39,8 @@ public static class ServiceCollectionExtensions
         {
             options.Realm = configuration["Steam:Realm"] ?? options.Realm;
             options.ReturnUrl = configuration["Steam:ReturnUrl"] ?? options.ReturnUrl;
-            options.FrontendAuthSuccessUrl =
-                configuration["Steam:FrontendAuthSuccessUrl"] ?? options.FrontendAuthSuccessUrl;
+            options.FrontendBaseUrl =
+                configuration["Steam:FrontendBaseUrl"] ?? options.FrontendBaseUrl;
             options.WebApiKey = configuration["Steam:WebApiKey"];
         });
 

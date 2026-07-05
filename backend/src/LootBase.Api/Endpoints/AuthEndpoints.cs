@@ -11,6 +11,8 @@ namespace LootBase.Api.Endpoints;
 
 public static class AuthEndpoints
 {
+    public const string SteamIdCookieName = "lootbase.steamId64";
+
     public static IEndpointRouteBuilder MapAuthEndpoints(this IEndpointRouteBuilder app)
     {
         var group = app.MapGroup("/api/auth").WithTags("Auth");
@@ -57,12 +59,19 @@ public static class AuthEndpoints
                 CookieAuthenticationDefaults.AuthenticationScheme,
                 new ClaimsPrincipal(identity));
 
-            return Results.Redirect(options.Value.FrontendAuthSuccessUrl);
+            httpContext.Response.Cookies.Append(SteamIdCookieName, user.SteamId64, new CookieOptions
+            {
+                HttpOnly = false,
+                SameSite = SameSiteMode.Lax
+            });
+
+            return Results.Redirect($"{options.Value.FrontendBaseUrl}/players/{user.SteamId64}");
         });
 
         group.MapPost("/logout", async (HttpContext httpContext) =>
         {
             await httpContext.SignOutAsync(CookieAuthenticationDefaults.AuthenticationScheme);
+            httpContext.Response.Cookies.Delete(SteamIdCookieName);
             return Results.NoContent();
         });
 

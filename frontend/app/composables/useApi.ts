@@ -3,6 +3,8 @@ export const useApiBase = () => {
   return config.public.apiBase
 }
 
+export const useCurrentSteamId = () => useCookie<string | null>('lootbase.steamId64', { default: () => null })
+
 export const useApiFetch = <T>(path: string, options = {}) => {
   const apiBase = useApiBase()
   const headers = import.meta.server ? useRequestHeaders(['cookie']) : undefined
