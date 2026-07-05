@@ -1,8 +1,13 @@
 <template>
   <div class="space-y-6">
-    <UButton to="/" variant="ghost" color="neutral" icon="i-lucide-arrow-left">
-      Zurueck
-    </UButton>
+    <div class="flex items-center justify-between gap-3">
+      <UButton to="/" variant="ghost" color="neutral" icon="i-lucide-arrow-left">
+        Zurueck
+      </UButton>
+      <UButton :disabled="!profile" :loading="refreshing" color="neutral" variant="soft" icon="i-lucide-refresh-cw" @click="refreshInventory">
+        Inventar syncen
+      </UButton>
+    </div>
 
     <UAlert
       v-if="error"
@@ -51,10 +56,26 @@
 <script setup lang="ts">
 const route = useRoute()
 const steamId64 = computed(() => String(route.params.steamId64))
+const apiBase = useApiBase()
+const refreshing = ref(false)
 
-const { data: profileResponse, error } = await useApiFetch<unknown>(
+const { data: profileResponse, error, refresh } = await useApiFetch<unknown>(
   `/api/players/${steamId64.value}`
 )
 
 const profile = computed(() => isPlayerProfile(profileResponse.value) ? profileResponse.value : null)
+
+const refreshInventory = async () => {
+  refreshing.value = true
+  try {
+    await $fetch('/api/me/inventory/refresh', {
+      baseURL: apiBase,
+      method: 'POST',
+      credentials: 'include'
+    })
+    await refresh()
+  } finally {
+    refreshing.value = false
+  }
+}
 </script>
