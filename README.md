@@ -77,18 +77,15 @@ PostgreSQL oder EF InMemory
 │       ├── LootBase.Domain/          # Entities und Konstanten
 │       └── LootBase.Infrastructure/  # EF Core, Steam, Pricing
 ├── frontend/                         # Nuxt App
-├── docker-compose.yml                # PostgreSQL für lokale Entwicklung
-├── .env.example                      # lokale Environment-Variablen
+├── docker-compose.yml                # Kompletter Stack: Frontend, Backend, PostgreSQL, Redis
+├── .env.example                      # Vorlage für .env (u. a. Steam__WebApiKey)
 ├── Directory.Packages.props          # zentrale NuGet-Versionen
 └── LootBase.sln
 ```
 
 ## Voraussetzungen
 
-- .NET SDK 10
-- Node.js 22 oder neuer
-- npm
-- Docker optional für PostgreSQL und Redis
+- Docker und Docker Compose
 - Öffentliches Steam-Inventar für echten Inventory Sync
 
 Steam-Inventar öffentlich setzen:
@@ -97,26 +94,14 @@ Steam-Inventar öffentlich setzen:
 Steam Profil -> Profil bearbeiten -> Privatsphäre-Einstellungen -> Inventar -> Öffentlich
 ```
 
-## Lokaler Start
+## Start
 
-Backend:
+Das Projekt wird ausschließlich über Docker Compose gestartet (Frontend, Backend, PostgreSQL, Redis, jeweils mit eigenem Dockerfile):
 
 ```bash
 cp .env.example .env
-set -a
-. ./.env
-set +a
-
-dotnet build LootBase.sln -m:1
-dotnet run --project backend/src/LootBase.Api/LootBase.Api.csproj
-```
-
-Frontend:
-
-```bash
-cd frontend
-npm ci
-npm run dev
+# Steam__WebApiKey in .env eintragen
+docker compose up -d --build
 ```
 
 Standard-URLs:
@@ -126,52 +111,24 @@ Standard-URLs:
 | Frontend | `http://localhost:3000` |
 | Backend | `http://localhost:5188` |
 
-Für Login und Cookies lokal konsequent `localhost` verwenden, nicht gemischt `localhost` und `127.0.0.1`.
-
 ## Konfiguration
 
-Lokale Runtime-Werte liegen in `.env`. Die Datei ist gitignored; `.env.example` dient als Vorlage.
+Die Laufzeit-Werte für Datenbank, Redis, Steam OpenID und CORS sind direkt in `docker-compose.yml` hinterlegt. Einzig `Steam__WebApiKey` kommt aus `.env`, da er ein Secret ist; `.env` ist gitignored, `.env.example` dient als Vorlage.
 
 | Variable | Beschreibung |
 | --- | --- |
 | `ConnectionStrings__LootBase` | PostgreSQL Connection String. Leer bedeutet EF InMemory. |
-| `ConnectionStrings__Redis` | Redis Connection String. Leer bedeutet lokaler Distributed Memory Cache. |
-| `Steam__Realm` | OpenID Realm, lokal `http://localhost:5188/`. |
+| `ConnectionStrings__Redis` | Redis Connection String. Leer bedeutet Distributed Memory Cache. |
+| `Steam__Realm` | OpenID Realm. |
 | `Steam__ReturnUrl` | Backend Callback für Steam OpenID. |
-| `Steam__FrontendAuthSuccessUrl` | Ziel nach erfolgreichem Login. |
+| `Steam__FrontendBaseUrl` | Frontend-Basis-URL, Redirect-Ziel nach erfolgreichem Login (`/players/{steamId64}`). |
 | `Steam__WebApiKey` | Optionaler Steam Web API Key für Profildaten. |
 | `Cors__AllowedOrigins__0` | Erlaubter Frontend-Origin. |
 | `NUXT_PUBLIC_API_BASE` | Backend-URL für das Nuxt-Frontend. |
 
-`.env` wird von ASP.NET Core nicht automatisch geladen. Für lokale Starts die Datei im Terminal exportieren:
-
-```bash
-set -a
-. ./.env
-set +a
-```
-
 ## PostgreSQL und Redis
 
-Ohne Connection String nutzt das Backend EF InMemory. Damit kann die Anwendung ohne Datenbank gestartet werden; Daten gehen beim Neustart verloren.
-
-PostgreSQL und Redis starten:
-
-```bash
-docker compose up -d postgres redis
-```
-
-Backend mit PostgreSQL und Redis starten:
-
-```bash
-set -a
-. ./.env
-set +a
-
-dotnet run --project backend/src/LootBase.Api/LootBase.Api.csproj
-```
-
-Beim Start wendet das Backend ausstehende EF-Core-Migrations automatisch an (`Database.Migrate()`), sofern eine relationale Connection String gesetzt ist. Neue Migration nach Modelländerungen erzeugen:
+Ohne Connection String nutzt das Backend EF InMemory. Beim Start wendet das Backend ausstehende EF-Core-Migrations automatisch an (`Database.Migrate()`), sofern eine relationale Connection String gesetzt ist. Neue Migration nach Modelländerungen erzeugen:
 
 ```bash
 dotnet ef migrations add <Name> \
@@ -208,9 +165,8 @@ Für CS2 gilt:
 | `GET` | `/api/auth/steam/callback` | Callback nach Steam OpenID |
 | `POST` | `/api/auth/logout` | Beendet die Session |
 | `GET` | `/api/leaderboard?appId=730&limit=50` | Leaderboard |
-| `GET` | `/api/players/{steamId64}` | Öffentliches Spielerprofil |
-| `GET` | `/api/me` | Eigenes Profil, Auth erforderlich |
-| `POST` | `/api/me/inventory/refresh` | Synchronisiert das eigene Inventar |
+| `GET` | `/api/players/{steamId64}` | Spielerprofil |
+| `POST` | `/api/players/{steamId64}/inventory/refresh` | Synchronisiert das Inventar, nur für den eingeloggten Nutzer selbst |
 | `GET` | `/api/pricing/items?marketHashNames=...&currency=EUR` | Preise für mehrere Items |
 | `GET` | `/api/pricing/items/{marketHashName}?currency=EUR` | Preis für ein Item |
 
@@ -236,6 +192,8 @@ Aktuelle Implementierungen:
 Weitere Spiele oder Preisquellen können über zusätzliche Provider ergänzt werden.
 
 ## Entwicklung
+
+Für lokales Bauen, Debuggen und Prüfen abseits von Docker werden .NET SDK 10 sowie Node.js 22 und npm benötigt.
 
 Backend builden:
 
@@ -295,7 +253,6 @@ backend/src/LootBase.Api/bin/Debug/net10.0/LootBase.Api.dll
 - Verlauf des Inventarwerts
 - Freundeslisten und private Leaderboards
 - Tests für Services, Provider und API-Endpunkte
-- Dockerfile und Deployment-Konfiguration
 
 ## Lizenz
 
