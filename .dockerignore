@@ -1,0 +1,16 @@
+.git/
+
+# .NET
+**/bin/
+**/obj/
+**/TestResults/
+
+# Nuxt / Node
+**/node_modules/
+**/.nuxt/
+**/.output/
+
+# Local config
+.env
+.env.*
+!.env.example
