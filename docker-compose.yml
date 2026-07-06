@@ -4,7 +4,7 @@ services:
       dockerfile: ./frontend/Dockerfile
     container_name: lootbase-node
     environment:
-      NUXT_PUBLIC_API_BASE: "http://localhost:4000"
+      NUXT_PUBLIC_API_BASE: "http://localhost:5188"
     ports:
       - "3000:3000"
     depends_on:
@@ -19,13 +19,13 @@ services:
       ASPNETCORE_ENVIRONMENT: Production
       ConnectionStrings__LootBase: "Host=postgres;Port=5432;Database=lootbase;Username=lootbase;Password=lootbase"
       ConnectionStrings__Redis: "redis:6379"
-      Steam__Realm: "http://localhost:4000/"
-      Steam__ReturnUrl: "http://localhost:4000/api/auth/steam/callback"
+      Steam__Realm: "http://localhost:5188/"
+      Steam__ReturnUrl: "http://localhost:5188/api/auth/steam/callback"
       Steam__FrontendBaseUrl: "http://localhost:3000"
       Steam__WebApiKey: ${Steam__WebApiKey}
       Cors__AllowedOrigins__0: "http://localhost:3000"
     ports:
-      - "4000:4000"
+      - "5188:5188"
     depends_on:
       postgres:
         condition: service_healthy

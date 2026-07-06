@@ -14,8 +14,8 @@ RUN dotnet publish backend/src/LootBase.Api/LootBase.Api.csproj -c Release -o /a
 FROM mcr.microsoft.com/dotnet/aspnet:10.0 AS runtime
 WORKDIR /app
 
-ENV ASPNETCORE_HTTP_PORTS=4000
+ENV ASPNETCORE_HTTP_PORTS=5188
 COPY --from=build /app/publish .
 
-EXPOSE 4000
+EXPOSE 5188
 ENTRYPOINT ["dotnet", "LootBase.Api.dll"]
