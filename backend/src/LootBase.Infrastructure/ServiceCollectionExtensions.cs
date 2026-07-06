@@ -10,6 +10,7 @@ using LootBase.Infrastructure.Pricing;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
+using Npgsql;
 
 namespace LootBase.Infrastructure;
 
@@ -32,7 +33,7 @@ public static class ServiceCollectionExtensions
                 return;
             }
 
-            options.UseNpgsql(connectionString);
+            options.UseNpgsql(ToNpgsqlConnectionString(connectionString));
         });
 
         services.Configure<SteamOptions>(options =>
@@ -70,5 +71,29 @@ public static class ServiceCollectionExtensions
         services.AddScoped<IPricingProvider>(sp => sp.GetRequiredService<IPricingCatalog>());
 
         return services;
+    }
+
+    private static string ToNpgsqlConnectionString(string connectionString)
+    {
+        if (!connectionString.StartsWith("postgres://", StringComparison.OrdinalIgnoreCase) &&
+            !connectionString.StartsWith("postgresql://", StringComparison.OrdinalIgnoreCase))
+        {
+            return connectionString;
+        }
+
+        var uri = new Uri(connectionString);
+        var userInfo = uri.UserInfo.Split(':', 2);
+
+        var builder = new NpgsqlConnectionStringBuilder
+        {
+            Host = uri.Host,
+            Port = uri.Port > 0 ? uri.Port : 5432,
+            Database = uri.AbsolutePath.TrimStart('/'),
+            Username = Uri.UnescapeDataString(userInfo[0]),
+            Password = userInfo.Length > 1 ? Uri.UnescapeDataString(userInfo[1]) : null,
+            SslMode = SslMode.Require
+        };
+
+        return builder.ConnectionString;
     }
 }

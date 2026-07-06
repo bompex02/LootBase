@@ -1,0 +1,45 @@
+services:
+  - type: web
+    name: lootbase-backend
+    runtime: docker
+    dockerfilePath: ./backend/Dockerfile
+    dockerContext: .
+    plan: free
+    healthCheckPath: /api/health
+    envVars:
+      - key: ASPNETCORE_ENVIRONMENT
+        value: Production
+      - key: ConnectionStrings__LootBase
+        fromDatabase:
+          name: lootbase-db
+          property: connectionString
+      # Set these manually in the Render dashboard after the first deploy,
+      # once you know the actual public URLs of both services:
+      - key: Steam__Realm
+        sync: false
+      - key: Steam__ReturnUrl
+        sync: false
+      - key: Steam__FrontendBaseUrl
+        sync: false
+      - key: Steam__WebApiKey
+        sync: false
+      - key: Cors__AllowedOrigins__0
+        sync: false
+
+  - type: web
+    name: lootbase-frontend
+    runtime: docker
+    dockerfilePath: ./frontend/Dockerfile
+    dockerContext: .
+    plan: free
+    envVars:
+      # Set to the backend service's URL after the first deploy
+      # (Render internal address if available, otherwise its public URL).
+      - key: NUXT_API_BASE
+        sync: false
+
+databases:
+  - name: lootbase-db
+    plan: free
+    databaseName: lootbase
+    user: lootbase
