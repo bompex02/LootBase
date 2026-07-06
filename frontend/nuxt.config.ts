@@ -4,17 +4,8 @@ export default defineNuxtConfig({
   modules: ['@nuxt/ui'],
   css: ['~/assets/css/main.css'],
   runtimeConfig: {
-    public: {
-      apiBase: process.env.NUXT_PUBLIC_API_BASE ?? 'http://localhost:5188'
-    }
-  },
-  nitro: {
-    devProxy: {
-      '/api': {
-        target: process.env.NUXT_PUBLIC_API_BASE ?? 'http://localhost:5188',
-        changeOrigin: true
-      }
-    }
+    // Server-only: the real backend address, used by server/routes/api/[...].ts to proxy all API calls
+    apiBase: process.env.NUXT_API_BASE ?? 'http://localhost:5188'
   },
   ui: {
     fonts: false,
