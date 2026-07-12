@@ -6,11 +6,7 @@ services:
         NUXT_API_BASE: "http://backend:4000"
     container_name: lootbase-node
     environment:
-<<<<<<< HEAD
-      NUXT_API_BASE: "http://backend:4000"
-=======
       NUXT_API_BASE: "http://backend:5188" # server-only, used by the Nitro proxy for all API calls
->>>>>>> be41e55bd6fad63f092c84ee8f913b318767697c
     ports:
       - "3000:3000"
     depends_on:
