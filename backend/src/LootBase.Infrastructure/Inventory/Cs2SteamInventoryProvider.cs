@@ -7,6 +7,14 @@ namespace LootBase.Infrastructure.Inventory;
 
 public sealed class Cs2SteamInventoryProvider(HttpClient httpClient) : IInventoryProvider
 {
+    // Exact, stable messages so callers (see PlayerEndpoints) can match on them
+    // to distinguish known Steam-API conditions from unexpected internal bugs,
+    // without needing a dedicated exception type.
+    public const string InventoryPrivateMessage =
+        "Steam inventory is not public. Set your Steam inventory privacy to Public and try again.";
+    public const string RateLimitMessage = "Steam rate limit reached. Wait a bit and try again.";
+    public const string InventoryRequestFailedMessage = "Steam inventory request failed.";
+
     private const int ContextId = 2;
     private const int PageSize = 5000;
     private const string IconBaseUrl = "https://community.cloudflare.steamstatic.com/economy/image/";
@@ -72,13 +80,12 @@ public sealed class Cs2SteamInventoryProvider(HttpClient httpClient) : IInventor
 
         if (response.StatusCode is HttpStatusCode.Forbidden or HttpStatusCode.Unauthorized)
         {
-            throw new InvalidOperationException(
-                "Steam inventory is not public. Set your Steam inventory privacy to Public and try again.");
+            throw new InvalidOperationException(InventoryPrivateMessage);
         }
 
         if (response.StatusCode == HttpStatusCode.TooManyRequests)
         {
-            throw new InvalidOperationException("Steam rate limit reached. Wait a bit and try again.");
+            throw new InvalidOperationException(RateLimitMessage);
         }
 
         response.EnsureSuccessStatusCode();
@@ -93,9 +100,10 @@ public sealed class Cs2SteamInventoryProvider(HttpClient httpClient) : IInventor
         {
             var error = root.TryGetProperty("Error", out var errorElement)
                 ? errorElement.GetString()
-                : "Steam inventory request failed.";
+                : null;
 
-            throw new InvalidOperationException(error);
+            throw new InvalidOperationException(
+                string.IsNullOrWhiteSpace(error) ? InventoryRequestFailedMessage : $"{InventoryRequestFailedMessage} {error}");
         }
 
         return new SteamInventoryPage(

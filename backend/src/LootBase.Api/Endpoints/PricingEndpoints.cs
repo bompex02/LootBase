@@ -15,7 +15,7 @@ public static class PricingEndpoints
             var names = ParseMarketHashNames(marketHashNames);
             if (names.Count == 0)
             {
-                return Results.BadRequest("Provide at least one marketHashNames value.");
+                return Results.BadRequest(new { error = "Provide at least one marketHashNames value." });
             }
 
             var items = await pricingCatalog.GetItemsAsync(

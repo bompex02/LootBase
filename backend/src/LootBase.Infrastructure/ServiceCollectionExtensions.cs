@@ -7,9 +7,11 @@ using LootBase.Infrastructure.Auth.Steam;
 using LootBase.Infrastructure.Inventory;
 using LootBase.Infrastructure.Persistence;
 using LootBase.Infrastructure.Pricing;
+using Microsoft.AspNetCore.DataProtection;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
+using StackExchange.Redis;
 
 namespace LootBase.Infrastructure;
 
@@ -55,6 +57,15 @@ public static class ServiceCollectionExtensions
                 options.Configuration = redisConnectionString;
                 options.InstanceName = "lootbase:";
             });
+
+            // Persist auth cookie encryption keys in Redis (rather than the
+            // container's local disk) so login sessions survive backend
+            // restarts/redeploys instead of being silently invalidated.
+            var redisConnection = ConnectionMultiplexer.Connect(redisConnectionString);
+            services.AddSingleton<IConnectionMultiplexer>(redisConnection);
+            services.AddDataProtection()
+                .SetApplicationName("LootBase")
+                .PersistKeysToStackExchangeRedis(redisConnection, "LootBase-DataProtection-Keys");
         }
 
         services.AddScoped<IUserRepository, EfUserRepository>();

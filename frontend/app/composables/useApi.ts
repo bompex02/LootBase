@@ -1,13 +1,24 @@
 export const useCurrentSteamId = () => useCookie<string | null>('lootbase.steamId64', { default: () => null })
 
-export const useApiFetch = <T>(path: string, options = {}) => {
+export const useApiFetch = <T>(path: string, options: { toastOnError?: boolean, [key: string]: unknown } = {}) => {
+  const { toastOnError = true, ...fetchOptions } = options
   const headers = import.meta.server ? useRequestHeaders(['cookie']) : undefined
 
-  return useFetch<T>(path, {
+  const result = useFetch<T>(path, {
     credentials: 'include',
     headers,
-    ...options
+    ...fetchOptions
   })
+
+  if (toastOnError && import.meta.client) {
+    watch(result.error, (value) => {
+      if (value) {
+        notifyApiError(value)
+      }
+    })
+  }
+
+  return result
 }
 
 export const formatCurrency = (value: number, currency = 'EUR') => {

@@ -3,6 +3,7 @@ using LootBase.Application;
 using LootBase.Infrastructure;
 using LootBase.Infrastructure.Persistence;
 using Microsoft.AspNetCore.Authentication.Cookies;
+using Microsoft.AspNetCore.Diagnostics;
 using Microsoft.EntityFrameworkCore;
 
 var builder = WebApplication.CreateBuilder(args);
@@ -83,6 +84,25 @@ using (var scope = app.Services.CreateScope())
         dbContext.Database.Migrate();
     }
 }
+
+app.UseExceptionHandler(errorApp =>
+{
+    errorApp.Run(async context =>
+    {
+        var exception = context.Features.Get<IExceptionHandlerFeature>()?.Error;
+        context.RequestServices.GetRequiredService<ILoggerFactory>()
+            .CreateLogger("GlobalExceptionHandler")
+            .LogError(exception, "Unhandled exception while processing {Path}", context.Request.Path);
+
+        context.Response.ContentType = "application/json";
+        context.Response.StatusCode = StatusCodes.Status500InternalServerError;
+        await context.Response.WriteAsJsonAsync(new
+        {
+            code = "internal_error",
+            error = "An unexpected error occurred. Please try again later."
+        });
+    });
+});
 
 app.UseCors("frontend");
 app.UseAuthentication();
