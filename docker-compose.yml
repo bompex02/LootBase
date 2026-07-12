@@ -2,8 +2,6 @@ services:
   frontend:
     build:
       dockerfile: ./frontend/Dockerfile
-      args:
-        NUXT_API_BASE: "http://backend:4000"
     container_name: lootbase-node
     environment:
       NUXT_API_BASE: "http://backend:5188" # server-only, used by the Nitro proxy for all API calls

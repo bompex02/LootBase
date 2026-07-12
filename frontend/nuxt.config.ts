@@ -3,16 +3,9 @@ export default defineNuxtConfig({
   devtools: { enabled: true },
   modules: ['@nuxt/ui'],
   css: ['~/assets/css/main.css'],
-<<<<<<< HEAD
-  routeRules: {
-    '/api/**': {
-      proxy: `${process.env.NUXT_API_BASE ?? 'http://localhost:5188'}/api/**`
-    }
-=======
   runtimeConfig: {
-    // Server-only: the real backend address, used by server/routes/api/[...].ts to proxy all API calls
+    // Server-only: the real backend address, used by server/api/[...proxy].ts to proxy all API calls
     apiBase: process.env.NUXT_API_BASE ?? 'http://localhost:5188'
->>>>>>> be41e55bd6fad63f092c84ee8f913b318767697c
   },
   ui: {
     fonts: false,
