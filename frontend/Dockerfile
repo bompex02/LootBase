@@ -1,6 +1,9 @@
 FROM node:22-alpine AS build
 WORKDIR /app
 
+ARG NUXT_API_BASE
+ENV NUXT_API_BASE=${NUXT_API_BASE}
+
 COPY frontend/package.json frontend/package-lock.json ./
 RUN npm ci
 

@@ -141,7 +141,7 @@ Lokale Runtime-Werte liegen in `.env`. Die Datei ist gitignored; `.env.example` 
 | `Steam__FrontendAuthSuccessUrl` | Ziel nach erfolgreichem Login. |
 | `Steam__WebApiKey` | Optionaler Steam Web API Key für Profildaten. |
 | `Cors__AllowedOrigins__0` | Erlaubter Frontend-Origin. |
-| `NUXT_PUBLIC_API_BASE` | Backend-URL für das Nuxt-Frontend. |
+| `NUXT_API_BASE` | Backend-URL, an die das Nuxt-Frontend `/api/**`-Requests proxyt (server- und clientseitig). |
 
 `.env` wird von ASP.NET Core nicht automatisch geladen. Für lokale Starts die Datei im Terminal exportieren:
 

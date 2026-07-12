@@ -25,7 +25,7 @@
                 <span class="max-w-32 truncate text-sm font-medium">{{ profile.personaName }}</span>
               </button>
             </UDropdownMenu>
-            <UButton v-else :to="`${apiBase}/api/auth/steam/login`" external color="primary" icon="i-lucide-log-in">
+            <UButton v-else to="/api/auth/steam/login" external color="primary" icon="i-lucide-log-in">
               Mit Steam anmelden
             </UButton>
           </nav>
@@ -40,7 +40,6 @@
 </template>
 
 <script setup lang="ts">
-const apiBase = useApiBase()
 const currentSteamId = useCurrentSteamId()
 const { data: profileResponse } = currentSteamId.value
   ? await useApiFetch<unknown>(`/api/players/${currentSteamId.value}`)
@@ -48,7 +47,7 @@ const { data: profileResponse } = currentSteamId.value
 const profile = computed(() => isPlayerProfile(profileResponse.value) ? profileResponse.value : null)
 
 const logout = async () => {
-  await $fetch('/api/auth/logout', { baseURL: apiBase, method: 'POST', credentials: 'include' })
+  await $fetch('/api/auth/logout', { method: 'POST', credentials: 'include' })
   currentSteamId.value = null
   await navigateTo('/', { external: true })
 }

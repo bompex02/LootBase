@@ -56,7 +56,6 @@
 <script setup lang="ts">
 const route = useRoute()
 const steamId64 = computed(() => String(route.params.steamId64))
-const apiBase = useApiBase()
 const currentSteamId = useCurrentSteamId()
 const isOwnProfile = computed(() => !!currentSteamId.value && currentSteamId.value === steamId64.value)
 const refreshing = ref(false)
@@ -71,7 +70,6 @@ const refreshInventory = async () => {
   refreshing.value = true
   try {
     await $fetch(`/api/players/${steamId64.value}/inventory/refresh`, {
-      baseURL: apiBase,
       method: 'POST',
       credentials: 'include'
     })

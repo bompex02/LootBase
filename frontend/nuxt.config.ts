@@ -3,17 +3,9 @@ export default defineNuxtConfig({
   devtools: { enabled: true },
   modules: ['@nuxt/ui'],
   css: ['~/assets/css/main.css'],
-  runtimeConfig: {
-    public: {
-      apiBase: process.env.NUXT_PUBLIC_API_BASE ?? 'http://localhost:5188'
-    }
-  },
-  nitro: {
-    devProxy: {
-      '/api': {
-        target: process.env.NUXT_PUBLIC_API_BASE ?? 'http://localhost:5188',
-        changeOrigin: true
-      }
+  routeRules: {
+    '/api/**': {
+      proxy: `${process.env.NUXT_API_BASE ?? 'http://localhost:5188'}/api/**`
     }
   },
   ui: {
