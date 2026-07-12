@@ -6,7 +6,11 @@ services:
         NUXT_API_BASE: "http://backend:4000"
     container_name: lootbase-node
     environment:
+<<<<<<< HEAD
       NUXT_API_BASE: "http://backend:4000"
+=======
+      NUXT_API_BASE: "http://backend:5188" # server-only, used by the Nitro proxy for all API calls
+>>>>>>> be41e55bd6fad63f092c84ee8f913b318767697c
     ports:
       - "3000:3000"
     depends_on:
@@ -19,15 +23,15 @@ services:
     container_name: lootbase-backend
     environment:
       ASPNETCORE_ENVIRONMENT: Production
-      ConnectionStrings__LootBase: "Host=postgres;Port=5432;Database=lootbase;Username=lootbase;Password=lootbase"
+      ConnectionStrings__LootBase: "Host=postgres;Port=5432;Database=${POSTGRES_DB};Username=${POSTGRES_USER};Password=${POSTGRES_PASSWORD}"
       ConnectionStrings__Redis: "redis:6379"
-      Steam__Realm: "http://localhost:4000/"
-      Steam__ReturnUrl: "http://localhost:4000/api/auth/steam/callback"
-      Steam__FrontendBaseUrl: "http://localhost:3000"
+      Steam__Realm: ${Steam__Realm}
+      Steam__ReturnUrl: ${Steam__ReturnUrl}
+      Steam__FrontendBaseUrl: ${Steam__FrontendBaseUrl}
       Steam__WebApiKey: ${Steam__WebApiKey}
-      Cors__AllowedOrigins__0: "http://localhost:3000"
+      Cors__AllowedOrigins__0: ${Cors__AllowedOrigins__0}
     ports:
-      - "4000:4000"
+      - "5188:5188"
     depends_on:
       postgres:
         condition: service_healthy
@@ -38,15 +42,15 @@ services:
     image: postgres:18
     container_name: lootbase-postgres
     environment:
-      POSTGRES_DB: lootbase
-      POSTGRES_USER: lootbase
-      POSTGRES_PASSWORD: lootbase
+      POSTGRES_DB: ${POSTGRES_DB}
+      POSTGRES_USER: ${POSTGRES_USER}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
     ports:
       - "5432:5432"
     volumes:
       - lootbase-postgres:/var/lib/postgresql
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U lootbase -d lootbase"]
+      test: ["CMD-SHELL", "pg_isready -U $$POSTGRES_USER -d $$POSTGRES_DB"]
       interval: 10s
       timeout: 5s
       retries: 5
