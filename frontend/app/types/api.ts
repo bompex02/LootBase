@@ -49,3 +49,30 @@ export interface PricingItem {
   retrievedAt: string
   updatedAt?: string | null
 }
+
+export type PricingHistoryPeriodKey = '24h' | '7d' | '30d' | '90d'
+
+export interface PricingHistoryPeriod {
+  period: PricingHistoryPeriodKey
+  minPrice?: number | null
+  maxPrice?: number | null
+  avgPrice?: number | null
+  medianPrice?: number | null
+  volume: number
+}
+
+export interface PricingHistoryDailyPoint {
+  date: string
+  minPrice?: number | null
+  maxPrice?: number | null
+  avgPrice?: number | null
+  medianPrice?: number | null
+  quantity: number
+}
+
+export interface PricingHistory {
+  marketHashName: string
+  currency: string
+  periods: PricingHistoryPeriod[]
+  dailyPoints: PricingHistoryDailyPoint[]
+}

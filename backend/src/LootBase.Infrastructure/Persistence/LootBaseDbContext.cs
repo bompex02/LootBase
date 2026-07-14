@@ -1,4 +1,5 @@
 using LootBase.Domain.Inventory;
+using LootBase.Domain.Pricing;
 using LootBase.Domain.Users;
 using Microsoft.EntityFrameworkCore;
 
@@ -11,6 +12,8 @@ public sealed class LootBaseDbContext(DbContextOptions<LootBaseDbContext> option
     public DbSet<InventoryItem> InventoryItems => Set<InventoryItem>();
 
     public DbSet<InventorySnapshot> InventorySnapshots => Set<InventorySnapshot>();
+
+    public DbSet<ItemPriceSnapshot> ItemPriceSnapshots => Set<ItemPriceSnapshot>();
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
@@ -57,6 +60,19 @@ public sealed class LootBaseDbContext(DbContextOptions<LootBaseDbContext> option
             snapshot.HasIndex(x => new { x.UserId, x.AppId, x.CapturedAt });
             snapshot.Property(x => x.Currency).HasMaxLength(3);
             snapshot.Property(x => x.TotalValue).HasPrecision(18, 2);
+        });
+
+        modelBuilder.Entity<ItemPriceSnapshot>(snapshot =>
+        {
+            snapshot.HasKey(x => x.Id);
+            snapshot.HasIndex(x => new { x.MarketHashName, x.Currency, x.CapturedDate }).IsUnique();
+            snapshot.Property(x => x.MarketHashName).HasMaxLength(240);
+            snapshot.Property(x => x.Currency).HasMaxLength(3);
+            snapshot.Property(x => x.MinPrice).HasPrecision(18, 2);
+            snapshot.Property(x => x.MedianPrice).HasPrecision(18, 2);
+            snapshot.Property(x => x.MeanPrice).HasPrecision(18, 2);
+            snapshot.Property(x => x.MaxPrice).HasPrecision(18, 2);
+            snapshot.Property(x => x.Source).HasMaxLength(16);
         });
     }
 }
