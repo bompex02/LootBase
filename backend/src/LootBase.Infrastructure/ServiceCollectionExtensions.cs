@@ -44,6 +44,8 @@ public static class ServiceCollectionExtensions
             options.FrontendBaseUrl =
                 configuration["Steam:FrontendBaseUrl"] ?? options.FrontendBaseUrl;
             options.WebApiKey = configuration["Steam:WebApiKey"];
+            options.MarketSessionCookie = configuration["Steam:MarketSessionCookie"];
+            options.MarketBackfillSecret = configuration["Steam:MarketBackfillSecret"];
         });
 
         if (string.IsNullOrWhiteSpace(redisConnectionString))
@@ -73,12 +75,15 @@ public static class ServiceCollectionExtensions
         services.AddHttpClient<ISteamOpenIdService, SteamOpenIdService>();
         services.AddHttpClient<ISteamProfileClient, SteamProfileClient>();
         services.AddHttpClient<IInventoryProvider, Cs2SteamInventoryProvider>();
+        services.AddHttpClient<ISteamMarketHistoryClient, SteamMarketHistoryClient>();
+        services.AddScoped<ItemPriceSnapshotStore>();
         services.AddHttpClient<IPricingCatalog, PricingProvider>()
             .ConfigurePrimaryHttpMessageHandler(() => new HttpClientHandler
             {
                 AutomaticDecompression = DecompressionMethods.All
             });
         services.AddScoped<IPricingProvider>(sp => sp.GetRequiredService<IPricingCatalog>());
+        services.AddScoped<IPricingHistoryProvider>(sp => (PricingProvider)sp.GetRequiredService<IPricingCatalog>());
 
         return services;
     }
