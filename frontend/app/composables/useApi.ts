@@ -44,7 +44,8 @@ export const formatDateTime = (value?: string | null) => {
 
   return new Intl.DateTimeFormat('de-DE', {
     dateStyle: 'medium',
-    timeStyle: 'short'
+    timeStyle: 'short',
+    timeZone: 'Europe/Berlin'
   }).format(new Date(value))
 }
 
