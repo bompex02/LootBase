@@ -7,29 +7,20 @@ using Microsoft.Extensions.Logging;
 
 namespace LootBase.Infrastructure.Pricing;
 
-// Owns our own daily price history (the ItemPriceSnapshots table) and its
-// only external top-up source, Steam Market's price history. Kept separate
-// from PricingProvider, which only talks to Skinport - this class is about
-// what we persist, not about any one upstream API.
 public sealed class ItemPriceSnapshotStore(
     LootBaseDbContext dbContext,
     ISteamMarketHistoryClient steamMarketHistory,
     ILogger<ItemPriceSnapshotStore> logger)
 {
-    // How far back auto-backfill reaches, and how close to that existing
-    // coverage must already be before we skip it.
+    // how far back auto-backfill reaches
     private const int BackfillTargetDays = 90;
     private const int SufficientCoverageDays = 85;
 
-    // One entry per "currency:marketHashName" recording the UTC date we last
-    // wrote a daily snapshot row for it, so hot paths (item views, inventory
-    // pricing) that record repeatedly only touch the database once per item
-    // per day instead of on every call.
     private static readonly ConcurrentDictionary<string, DateOnly> LastSnapshotDateByItem = new(StringComparer.OrdinalIgnoreCase);
 
     // Guards EnsureBackfilledFromSteamAsync: once attempted for an item
     // (success or failure), don't retry for a day, so opening the same
-    // item's history repeatedly can't hammer Steam's undocumented endpoint.
+    // item's history repeatedly can't hammer Steam's undocumented endpoint
     private static readonly ConcurrentDictionary<string, DateOnly> LastAutoBackfillAttemptByItem = new(StringComparer.OrdinalIgnoreCase);
 
     public async Task RecordDailySnapshotAsync(
@@ -116,10 +107,6 @@ public sealed class ItemPriceSnapshotStore(
             .ToList();
     }
 
-    // Called on every history view so that the very first time anyone opens
-    // an item's history, we transparently backfill up to 90 real days from
-    // Steam Market (if Steam:MarketSessionCookie is configured) instead of
-    // making users wait weeks for organic accumulation to fill the chart in.
     public async Task EnsureBackfilledFromSteamAsync(
         string marketHashName,
         string currency,
@@ -154,8 +141,6 @@ public sealed class ItemPriceSnapshotStore(
         }
         catch (Exception ex)
         {
-            // Never let a Steam hiccup (parsing, timeout, rate limit) break a
-            // regular history page view - the periods/organic data still work.
             logger.LogWarning(ex, "Auto-backfilling {MarketHashName} from Steam failed.", marketHashName);
         }
     }
@@ -168,9 +153,7 @@ public sealed class ItemPriceSnapshotStore(
             return 0;
         }
 
-        // Only import what GetDailySnapshotsAsync actually reads back out
-        // (last 90 days) - Steam's history goes back years, but nothing
-        // older than that is ever read, so importing it would just be dead rows.
+        // checks, that only the last 90 days are imported + ensures, that nothing is imported twice
         var cutoff = DateOnly.FromDateTime(DateTime.UtcNow).AddDays(-BackfillTargetDays);
         var relevantPoints = result.Points.Where(point => point.Date >= cutoff).ToList();
         if (relevantPoints.Count == 0)
