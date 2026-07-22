@@ -6,10 +6,8 @@ using Microsoft.Extensions.Logging;
 
 namespace LootBase.Infrastructure.Pricing;
 
-// Steam only exposes market/pricehistory to an authenticated
-// steamcommunity.com session - there is no public/official API for it.
-// This is only usable once Steam:MarketRefreshToken is configured; the
-// actual per-request cookie is minted on demand by SteamAccessTokenProvider.
+// Steam's pricehistory endpoint is unofficial and needs a logged-in session
+// cookie, which SteamAccessTokenProvider mints on demand from a refresh token
 public sealed class SteamMarketHistoryClient(
     HttpClient httpClient,
     SteamAccessTokenProvider accessTokenProvider,
@@ -50,10 +48,6 @@ public sealed class SteamMarketHistoryClient(
 
         if (!response.IsSuccessStatusCode)
         {
-            // Most non-success responses here are Steam saying "this item has
-            // no market listing" (agents, stickers, graffiti, ...), not a
-            // sign of throttling - expected often enough during a bulk scan
-            // that it's not worth logging at warning level.
             logger.LogDebug(
                 "Steam market price history request for {MarketHashName} returned {StatusCode}; treating as no data.",
                 marketHashName, (int)response.StatusCode);

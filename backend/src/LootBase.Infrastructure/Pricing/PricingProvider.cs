@@ -7,8 +7,7 @@ using Microsoft.Extensions.Logging;
 
 namespace LootBase.Infrastructure.Pricing;
 
-// Current price and history both come from one bulk Skinport call
-// (/v1/sales/history, no market_hash_name); current price = last_24_hours.
+// Price and history both come from one bulk Skinport call (/v1/sales/history); current price = last_24_hours
 public sealed class PricingProvider(
     HttpClient httpClient,
     IDistributedCache distributedCache,

@@ -20,7 +20,6 @@ public sealed class ItemPriceSnapshot
 
     public int Quantity { get; set; }
 
-    // "skinport" (recorded organically from live pricing lookups) or "steam"
-    // (backfilled from Steam Market's price history)
+    // "skinport" (from live lookups) or "steam" (backfilled)
     public string Source { get; set; } = "skinport";
 }

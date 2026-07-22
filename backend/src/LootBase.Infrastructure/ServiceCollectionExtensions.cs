@@ -60,9 +60,7 @@ public static class ServiceCollectionExtensions
                 options.InstanceName = "lootbase:";
             });
 
-            // Persist auth cookie encryption keys in Redis (rather than the
-            // container's local disk) so login sessions survive backend
-            // restarts/redeploys instead of being silently invalidated.
+            // Keep cookie encryption keys in Redis, not local disk, so logins survive a redeploy
             var redisConnection = ConnectionMultiplexer.Connect(redisConnectionString);
             services.AddSingleton<IConnectionMultiplexer>(redisConnection);
             services.AddDataProtection()

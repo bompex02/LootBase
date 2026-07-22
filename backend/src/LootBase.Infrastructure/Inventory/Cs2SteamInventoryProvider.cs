@@ -7,9 +7,7 @@ namespace LootBase.Infrastructure.Inventory;
 
 public sealed class Cs2SteamInventoryProvider(HttpClient httpClient) : IInventoryProvider
 {
-    // Exact, stable messages so callers (see PlayerEndpoints) can match on them
-    // to distinguish known Steam-API conditions from unexpected internal bugs,
-    // without needing a dedicated exception type.
+    // Stable text so callers (PlayerEndpoints) can match on it without a dedicated exception type
     public const string InventoryPrivateMessage =
         "Steam inventory is not public. Set your Steam inventory privacy to Public and try again.";
     public const string RateLimitMessage = "Steam rate limit reached. Wait a bit and try again.";

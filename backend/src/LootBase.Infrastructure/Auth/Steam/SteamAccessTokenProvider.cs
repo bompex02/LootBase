@@ -6,13 +6,10 @@ using Microsoft.Extensions.Options;
 
 namespace LootBase.Infrastructure.Auth.Steam;
 
-// Mints short-lived steamLoginSecure cookies from a long-lived Steam refresh
-// token via Steam's (unofficial) GenerateAccessTokenForApp endpoint. Each
-// refresh also asks Steam to rotate the refresh token itself (renewal_type
-// "Allow"), and persists whatever token comes back to the DB - so besides
-// the one-time bootstrap value in Steam:MarketRefreshToken, nobody ever has
-// to hand-copy a Steam cookie again, as long as the session isn't revoked
-// (password change, "log out all devices", etc).
+// Mints steamLoginSecure cookies from a long-lived Steam refresh token, and
+// asks Steam to rotate that refresh token on every call, persisting whatever
+// comes back to the DB. So nobody has to hand-copy a Steam cookie again -
+// unless the session gets revoked entirely (password change, etc)
 public sealed class SteamAccessTokenProvider(
     HttpClient httpClient,
     LootBaseDbContext dbContext,

@@ -17,18 +17,12 @@ public sealed class ItemPriceSnapshotStore(
 
     private static readonly ConcurrentDictionary<string, DateOnly> LastSnapshotDateByItem = new(StringComparer.OrdinalIgnoreCase);
 
-    // Steam Market's rate limit isn't documented beyond the explicit 429
-    // response, so we self-impose a global (not per-item) minimum gap
-    // between calls on top of reacting to that signal directly.
+    // Steam never documented its rate limit, so we self-impose a global minimum gap between calls too
     private static readonly Lock SteamThrottleLock = new();
     private static readonly TimeSpan MinIntervalBetweenSteamCalls = TimeSpan.FromSeconds(3);
     private static readonly TimeSpan SteamCircuitCooldown = TimeSpan.FromMinutes(30);
 
-    // Only used for ambiguous failures (exceptions, timeouts) - a genuine
-    // 429 opens the circuit immediately, no streak needed. A run of plain
-    // "no data" responses (400/404/success:false) is expected and common
-    // during a bulk scan - stickers, agents, graffiti etc. Steam has no
-    // listing for - and never counts against this.
+    // Only for ambiguous failures - a real 429 opens the circuit right away, no streak needed
     private const int MaxConsecutiveFailuresBeforeCircuit = 5;
     private static DateTimeOffset lastSteamCallAt = DateTimeOffset.MinValue;
     private static DateTimeOffset steamCircuitOpenUntil = DateTimeOffset.MinValue;
@@ -69,8 +63,7 @@ public sealed class ItemPriceSnapshotStore(
         }
     }
 
-    // For exceptions/timeouts only - an ambiguous signal, so it takes
-    // several in a row before we treat it like a real block.
+    // Ambiguous signal, so it takes a few in a row before we treat it like a real block
     private void RegisterSteamCallError(string marketHashName)
     {
         lock (SteamThrottleLock)
@@ -220,10 +213,8 @@ public sealed class ItemPriceSnapshotStore(
         await dbContext.SaveChangesAsync(cancellationToken);
     }
 
-    // Best-effort, called on every history view. Skips items that already
-    // have enough real coverage, respects the global throttle/circuit
-    // breaker, and never throws - a broken cookie degrades silently back to
-    // whatever SeedFromSkinportPeriodsAsync provides.
+    // Best-effort, called on every history view - never throws, just falls
+    // back to whatever SeedFromSkinportPeriodsAsync already provided
     public async Task EnsureBackfilledFromSteamAsync(
         string marketHashName,
         string currency,
@@ -246,11 +237,8 @@ public sealed class ItemPriceSnapshotStore(
         }
     }
 
-    // Same rules as EnsureBackfilledFromSteamAsync, but WAITS for the
-    // throttle window to open instead of skipping the item - there's no
-    // impatient page load on the other end of a one-time bulk run. Shares
-    // the same static throttle/circuit state, so a bulk run and a live user
-    // request can never combine to exceed the rate budget.
+    // Same as EnsureBackfilledFromSteamAsync, but waits for the throttle
+    // window instead of skipping - fine here, nobody's waiting on a page load
     public async Task<BulkBackfillItemResult> BulkBackfillItemAsync(
         string marketHashName,
         string currency,
@@ -276,10 +264,8 @@ public sealed class ItemPriceSnapshotStore(
         }
     }
 
-    // Only a "steam"-sourced row proves a real backfill already ran. Skinport
-    // seed anchors (SeedFromSkinportPeriodsAsync) are sparse single-day
-    // estimates - if they counted here, one 90-day anchor point would look
-    // like "covered" forever and permanently block the real backfill.
+    // Only a "steam" row counts as real coverage - a single Skinport seed
+    // anchor would otherwise look "covered" forever and block the real backfill
     private async Task<bool> HasSufficientCoverageAsync(
         string marketHashName,
         string currency,
@@ -305,10 +291,7 @@ public sealed class ItemPriceSnapshotStore(
         }
     }
 
-    // Returns null only when Steam explicitly rate limited us (429) -
-    // distinct from 0, which covers both "no data for this item" and
-    // "call succeeded but had nothing new to add". Callers use null to
-    // decide whether to open the circuit breaker.
+    // Null means rate-limited (429); 0 means it just had nothing to add
     public async Task<int?> BackfillFromSteamAsync(string marketHashName, CancellationToken cancellationToken)
     {
         var result = await steamMarketHistory.GetPriceHistoryAsync(marketHashName, cancellationToken);

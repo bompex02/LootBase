@@ -8,12 +8,10 @@ public enum SteamMarketHistoryOutcome
 {
     Success,
 
-    // The call completed but Steam has no market history for this item -
-    // very common for stickers/agents/graffiti/patches that aren't
-    // individually listed. Not a sign of rate limiting.
+    // No history for this item (common for stickers/agents/graffiti). Not rate limiting
     NoData,
 
-    // Steam responded 429 - an explicit, unambiguous signal to back off.
+    // Steam responded 429 - an explicit, unambiguous signal to back off
     RateLimited
 }
 

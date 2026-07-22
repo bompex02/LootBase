@@ -1,9 +1,7 @@
 namespace LootBase.Infrastructure.Auth.Steam;
 
-// Single-row table holding the current Steam market refresh token.
-// Steam:MarketRefreshToken (config) only seeds the very first row - after
-// that, SteamAccessTokenProvider keeps this updated with whatever rotated
-// token Steam hands back, so the token never has to be copied by hand again.
+// Single-row table for the current Steam refresh token. Config only seeds the
+// first row; SteamAccessTokenProvider keeps it updated after that
 public sealed class SteamMarketCredential
 {
     public const int SingletonId = 1;
