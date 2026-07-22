@@ -23,6 +23,15 @@ export interface InventoryItem {
   currency: string
 }
 
+export interface ItemMetadata {
+  marketHashName: string
+  displayName: string
+  iconUrl?: string | null
+  type?: string | null
+  exterior?: string | null
+  rarity?: string | null
+}
+
 export interface PlayerProfile {
   steamId64: string
   personaName: string

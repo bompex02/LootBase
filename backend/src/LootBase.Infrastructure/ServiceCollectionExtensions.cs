@@ -69,6 +69,7 @@ public static class ServiceCollectionExtensions
         }
 
         services.AddScoped<IUserRepository, EfUserRepository>();
+        services.AddScoped<IItemCatalogRepository, EfItemCatalogRepository>();
         services.AddScoped<IInventoryRefreshService, InventoryRefreshService>();
         services.AddHttpClient<ISteamOpenIdService, SteamOpenIdService>();
         services.AddHttpClient<ISteamProfileClient, SteamProfileClient>();

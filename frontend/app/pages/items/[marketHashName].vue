@@ -141,7 +141,7 @@
 </template>
 
 <script setup lang="ts">
-import type { InventoryItem, PricingHistory, PricingHistoryPeriodKey, PricingItem } from '~/types/api'
+import type { InventoryItem, ItemMetadata, PricingHistory, PricingHistoryPeriodKey, PricingItem } from '~/types/api'
 import type { PriceHistoryChartPoint } from '~/components/PriceHistoryChart.vue'
 
 const route = useRoute()
@@ -150,6 +150,11 @@ const marketHashName = computed(() => String(route.params.marketHashName))
 const selectedItem = useState<InventoryItem | null>('selected-inventory-item')
 const ownedItem = computed(() =>
   selectedItem.value?.marketHashName === marketHashName.value ? selectedItem.value : null)
+
+const { data: metadata } = await useApiFetch<ItemMetadata>(
+  `/api/items/${encodeURIComponent(marketHashName.value)}`,
+  { toastOnError: false }
+)
 
 const { data: pricing, pending, error: pricingError } = await useApiFetch<PricingItem>(
   `/api/pricing/items/${encodeURIComponent(marketHashName.value)}`,
@@ -241,11 +246,11 @@ const displayItem = computed(() => {
   }
 
   return {
-    displayName: marketHashName.value,
-    iconUrl: route.query.icon ? String(route.query.icon) : undefined,
-    type: route.query.type ? String(route.query.type) : undefined,
-    exterior: route.query.exterior ? String(route.query.exterior) : undefined,
-    rarity: route.query.rarity ? String(route.query.rarity) : undefined
+    displayName: metadata.value?.displayName ?? marketHashName.value,
+    iconUrl: metadata.value?.iconUrl,
+    type: metadata.value?.type,
+    exterior: metadata.value?.exterior,
+    rarity: metadata.value?.rarity
   }
 })
 

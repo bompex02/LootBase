@@ -40,10 +40,6 @@ const togglePriceMode = (item: InventoryItem) => {
 const handleSelect = (item: InventoryItem) => {
   useState<InventoryItem | null>('selected-inventory-item').value = item
 
-  const query = Object.fromEntries(
-    Object.entries({ rarity: item.rarity, type: item.type, exterior: item.exterior, icon: item.iconUrl })
-      .filter((entry): entry is [string, string] => !!entry[1]))
-
-  navigateTo({ path: `/items/${encodeURIComponent(item.marketHashName)}`, query })
+  navigateTo(`/items/${encodeURIComponent(item.marketHashName)}`)
 }
 </script>

@@ -110,6 +110,7 @@ app.UseAuthorization();
 
 app.MapHealthEndpoints();
 app.MapAuthEndpoints();
+app.MapItemsEndpoints();
 app.MapPricingEndpoints();
 app.MapLeaderboardEndpoints();
 app.MapPlayerEndpoints();
