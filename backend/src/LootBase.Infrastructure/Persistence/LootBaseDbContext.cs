@@ -1,6 +1,7 @@
 using LootBase.Domain.Inventory;
 using LootBase.Domain.Pricing;
 using LootBase.Domain.Users;
+using LootBase.Infrastructure.Auth.Steam;
 using Microsoft.EntityFrameworkCore;
 
 namespace LootBase.Infrastructure.Persistence;
@@ -14,6 +15,8 @@ public sealed class LootBaseDbContext(DbContextOptions<LootBaseDbContext> option
     public DbSet<InventorySnapshot> InventorySnapshots => Set<InventorySnapshot>();
 
     public DbSet<ItemPriceSnapshot> ItemPriceSnapshots => Set<ItemPriceSnapshot>();
+
+    public DbSet<SteamMarketCredential> SteamMarketCredentials => Set<SteamMarketCredential>();
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
@@ -73,6 +76,13 @@ public sealed class LootBaseDbContext(DbContextOptions<LootBaseDbContext> option
             snapshot.Property(x => x.MeanPrice).HasPrecision(18, 2);
             snapshot.Property(x => x.MaxPrice).HasPrecision(18, 2);
             snapshot.Property(x => x.Source).HasMaxLength(16);
+        });
+
+        modelBuilder.Entity<SteamMarketCredential>(credential =>
+        {
+            credential.HasKey(x => x.Id);
+            credential.Property(x => x.Id).ValueGeneratedNever();
+            credential.Property(x => x.RefreshToken).IsRequired();
         });
     }
 }
