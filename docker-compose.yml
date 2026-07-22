@@ -23,7 +23,7 @@ services:
       Steam__ReturnUrl: ${Steam__ReturnUrl}
       Steam__FrontendBaseUrl: ${Steam__FrontendBaseUrl}
       Steam__WebApiKey: ${Steam__WebApiKey}
-      Steam__MarketSessionCookie: ${Steam__MarketSessionCookie}
+      Steam__MarketRefreshToken: ${Steam__MarketRefreshToken}
       Steam__MarketBackfillSecret: ${Steam__MarketBackfillSecret}
       Cors__AllowedOrigins__0: ${Cors__AllowedOrigins__0}
     ports:

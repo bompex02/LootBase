@@ -10,10 +10,12 @@ public sealed class SteamOptions
 
     public string? WebApiKey { get; set; }
 
-    // "steamLoginSecure=...; sessionid=..." from a logged-in steamcommunity.com
-    // browser session - required to call the (unofficial) market price history
-    // endpoint, which Steam only exposes to authenticated sessions
-    public string? MarketSessionCookie { get; set; }
+    // Long-lived refresh token (the "steamRefreshToken" cookie's JWT) from a
+    // logged-in steamcommunity.com session. SteamAccessTokenProvider exchanges
+    // it for short-lived access tokens on demand, so this only needs to be
+    // replaced when the refresh token itself expires (~1 year), unlike a raw
+    // steamLoginSecure cookie which expires roughly daily.
+    public string? MarketRefreshToken { get; set; }
 
     // Shared secret required to trigger a price-history backfill. There's no
     // admin/role system in this app, so this is the simplest gate that keeps

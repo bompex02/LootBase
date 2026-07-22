@@ -44,7 +44,7 @@ public static class ServiceCollectionExtensions
             options.FrontendBaseUrl =
                 configuration["Steam:FrontendBaseUrl"] ?? options.FrontendBaseUrl;
             options.WebApiKey = configuration["Steam:WebApiKey"];
-            options.MarketSessionCookie = configuration["Steam:MarketSessionCookie"];
+            options.MarketRefreshToken = configuration["Steam:MarketRefreshToken"];
             options.MarketBackfillSecret = configuration["Steam:MarketBackfillSecret"];
         });
 
@@ -75,6 +75,7 @@ public static class ServiceCollectionExtensions
         services.AddHttpClient<ISteamOpenIdService, SteamOpenIdService>();
         services.AddHttpClient<ISteamProfileClient, SteamProfileClient>();
         services.AddHttpClient<IInventoryProvider, Cs2SteamInventoryProvider>();
+        services.AddHttpClient<SteamAccessTokenProvider>();
         services.AddHttpClient<ISteamMarketHistoryClient, SteamMarketHistoryClient>();
         services.AddScoped<ItemPriceSnapshotStore>();
         services.AddHttpClient<IPricingCatalog, PricingProvider>()

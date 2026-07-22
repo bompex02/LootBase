@@ -3,17 +3,16 @@ using System.Text.Json;
 using LootBase.Application.Abstractions.Pricing;
 using LootBase.Infrastructure.Auth.Steam;
 using Microsoft.Extensions.Logging;
-using Microsoft.Extensions.Options;
 
 namespace LootBase.Infrastructure.Pricing;
 
 // Steam only exposes market/pricehistory to an authenticated
 // steamcommunity.com session - there is no public/official API for it.
-// This is only usable once Steam:MarketSessionCookie is configured with a
-// cookie header from a real, logged-in Steam account
+// This is only usable once Steam:MarketRefreshToken is configured; the
+// actual per-request cookie is minted on demand by SteamAccessTokenProvider.
 public sealed class SteamMarketHistoryClient(
     HttpClient httpClient,
-    IOptions<SteamOptions> options,
+    SteamAccessTokenProvider accessTokenProvider,
     ILogger<SteamMarketHistoryClient> logger) : ISteamMarketHistoryClient
 {
     private static readonly Dictionary<string, string> CurrencySymbols = new()
@@ -24,15 +23,14 @@ public sealed class SteamMarketHistoryClient(
         ["pуб"] = "RUB"
     };
 
-    private readonly SteamOptions options = options.Value;
-
     public async Task<SteamMarketHistoryResult> GetPriceHistoryAsync(
         string marketHashName,
         CancellationToken cancellationToken)
     {
-        if (string.IsNullOrWhiteSpace(options.MarketSessionCookie))
+        var cookie = await accessTokenProvider.GetMarketCookieAsync(cancellationToken);
+        if (cookie is null)
         {
-            logger.LogWarning("Steam:MarketSessionCookie is not configured; cannot fetch Steam market price history.");
+            logger.LogWarning("Steam:MarketRefreshToken is not configured or refresh failed; cannot fetch Steam market price history.");
             return SteamMarketHistoryResult.NoDataResult;
         }
 
@@ -40,7 +38,7 @@ public sealed class SteamMarketHistoryClient(
             $"https://steamcommunity.com/market/pricehistory/?appid=730&market_hash_name={Uri.EscapeDataString(marketHashName)}";
 
         using var request = new HttpRequestMessage(HttpMethod.Get, requestUri);
-        request.Headers.Add("Cookie", options.MarketSessionCookie);
+        request.Headers.Add("Cookie", cookie);
 
         using var response = await httpClient.SendAsync(request, cancellationToken);
 
