@@ -8,7 +8,7 @@ using Microsoft.Extensions.Options;
 namespace LootBase.Infrastructure.Pricing;
 
 // Steam only exposes market/pricehistory to an authenticated
-// steamcommunity.com session - there is no public/official API for it. 
+// steamcommunity.com session - there is no public/official API for it.
 // This is only usable once Steam:MarketSessionCookie is configured with a
 // cookie header from a real, logged-in Steam account
 public sealed class SteamMarketHistoryClient(
@@ -26,14 +26,14 @@ public sealed class SteamMarketHistoryClient(
 
     private readonly SteamOptions options = options.Value;
 
-    public async Task<SteamMarketHistoryDto?> GetPriceHistoryAsync(
+    public async Task<SteamMarketHistoryResult> GetPriceHistoryAsync(
         string marketHashName,
         CancellationToken cancellationToken)
     {
         if (string.IsNullOrWhiteSpace(options.MarketSessionCookie))
         {
             logger.LogWarning("Steam:MarketSessionCookie is not configured; cannot fetch Steam market price history.");
-            return null;
+            return SteamMarketHistoryResult.NoDataResult;
         }
 
         var requestUri =
@@ -43,12 +43,23 @@ public sealed class SteamMarketHistoryClient(
         request.Headers.Add("Cookie", options.MarketSessionCookie);
 
         using var response = await httpClient.SendAsync(request, cancellationToken);
+
+        if (response.StatusCode == System.Net.HttpStatusCode.TooManyRequests)
+        {
+            logger.LogWarning("Steam market price history request was rate limited (429).");
+            return SteamMarketHistoryResult.RateLimitedResult;
+        }
+
         if (!response.IsSuccessStatusCode)
         {
-            logger.LogWarning(
-                "Steam market price history request failed with status code {StatusCode}.",
-                (int)response.StatusCode);
-            return null;
+            // Most non-success responses here are Steam saying "this item has
+            // no market listing" (agents, stickers, graffiti, ...), not a
+            // sign of throttling - expected often enough during a bulk scan
+            // that it's not worth logging at warning level.
+            logger.LogDebug(
+                "Steam market price history request for {MarketHashName} returned {StatusCode}; treating as no data.",
+                marketHashName, (int)response.StatusCode);
+            return SteamMarketHistoryResult.NoDataResult;
         }
 
         await using var stream = await response.Content.ReadAsStreamAsync(cancellationToken);
@@ -59,13 +70,13 @@ public sealed class SteamMarketHistoryClient(
             successElement.ValueKind != JsonValueKind.True ||
             !root.TryGetProperty("prices", out var pricesElement))
         {
-            return null;
+            return SteamMarketHistoryResult.NoDataResult;
         }
 
         var currency = DetectCurrency(root);
         var points = ParsePoints(pricesElement);
 
-        return new SteamMarketHistoryDto(currency, points);
+        return SteamMarketHistoryResult.Success(new SteamMarketHistoryDto(currency, points));
     }
 
     private static string DetectCurrency(JsonElement root)

@@ -74,7 +74,73 @@ public static class PricingEndpoints
             }
 
             var imported = await pricingHistory.BackfillFromSteamAsync(marketHashName, cancellationToken);
-            return Results.Ok(new { imported });
+            return Results.Ok(new { imported = imported ?? 0, success = imported is not null });
+        })
+        .WithTags("Pricing");
+
+        app.MapPost("/api/pricing/backfill-all", (
+            HttpRequest request,
+            string? currency,
+            IOptions<SteamOptions> steamOptions,
+            IPricingHistoryProvider pricingHistory,
+            IServiceScopeFactory scopeFactory,
+            ILoggerFactory loggerFactory) =>
+        {
+            var expectedSecret = steamOptions.Value.MarketBackfillSecret;
+            if (string.IsNullOrWhiteSpace(expectedSecret) ||
+                request.Headers["X-Backfill-Key"] != expectedSecret)
+            {
+                return Results.Unauthorized();
+            }
+
+            if (!pricingHistory.TryStartBulkBackfill())
+            {
+                return Results.Conflict(new
+                {
+                    started = false,
+                    note = "A bulk backfill is already running; not starting a second one.",
+                    status = pricingHistory.GetBulkBackfillStatus()
+                });
+            }
+
+            var effectiveCurrency = currency ?? "EUR";
+            var logger = loggerFactory.CreateLogger("PricingBulkBackfill");
+
+            _ = Task.Run(async () =>
+            {
+                using var scope = scopeFactory.CreateScope();
+                try
+                {
+                    var historyProvider = scope.ServiceProvider.GetRequiredService<IPricingHistoryProvider>();
+                    await historyProvider.BackfillAllFromSteamAsync(effectiveCurrency, CancellationToken.None);
+                }
+                catch (Exception ex)
+                {
+                    logger.LogError(ex, "Bulk Steam backfill crashed.");
+                }
+            });
+
+            return Results.Accepted(value: new
+            {
+                started = true,
+                note = "Runs in the background over every Skinport-known item; watch the API logs for progress."
+            });
+        })
+        .WithTags("Pricing");
+
+        app.MapGet("/api/pricing/backfill-all/status", (
+            HttpRequest request,
+            IOptions<SteamOptions> steamOptions,
+            IPricingHistoryProvider pricingHistory) =>
+        {
+            var expectedSecret = steamOptions.Value.MarketBackfillSecret;
+            if (string.IsNullOrWhiteSpace(expectedSecret) ||
+                request.Headers["X-Backfill-Key"] != expectedSecret)
+            {
+                return Results.Unauthorized();
+            }
+
+            return Results.Ok(pricingHistory.GetBulkBackfillStatus());
         })
         .WithTags("Pricing");
 
