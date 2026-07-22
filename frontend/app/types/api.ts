@@ -37,17 +37,14 @@ export interface PlayerProfile {
 export interface PricingItem {
   marketHashName: string
   currency: string
-  suggestedPrice?: number | null
   meanPrice?: number | null
   medianPrice?: number | null
   minPrice?: number | null
   maxPrice?: number | null
-  quantity: number
   itemPage?: string | null
   marketPage?: string | null
   source: string
   retrievedAt: string
-  updatedAt?: string | null
 }
 
 export type PricingHistoryPeriodKey = '24h' | '7d' | '30d' | '90d'

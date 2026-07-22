@@ -63,8 +63,6 @@
       </section>
 
       <section class="space-y-3">
-        <h2 class="text-lg font-semibold">Marktpreise</h2>
-
         <UAlert
           v-if="pricingError"
           color="warning"
@@ -75,19 +73,7 @@
         />
 
         <template v-else-if="pricing">
-          <div class="rounded-md border border-zinc-800 bg-[#101821] p-5">
-            <PriceStatsChart
-              v-if="priceStats.length"
-              :stats="priceStats"
-              :currency="pricing.currency"
-              :color="rarityColor"
-            />
-            <p v-else class="text-sm text-zinc-500">Keine Preisstatistik verfügbar.</p>
-          </div>
-
           <div class="grid gap-2 text-xs text-zinc-500 sm:grid-cols-2">
-            <p>Quelle: <span class="text-zinc-300">{{ pricing.source }}</span></p>
-            <p>Aktualisiert: <span class="text-zinc-300">{{ formatDateTime(pricing.updatedAt ?? pricing.retrievedAt) }}</span></p>
             <UButton
               v-if="pricing.itemPage"
               :to="pricing.itemPage"
@@ -264,18 +250,4 @@ const displayItem = computed(() => {
 })
 
 const rarityColor = computed(() => getRarityColor(displayItem.value?.rarity))
-
-const priceStats = computed(() => {
-  if (!pricing.value) {
-    return []
-  }
-
-  return [
-    { label: 'Min', value: pricing.value.minPrice },
-    { label: 'Median', value: pricing.value.medianPrice },
-    { label: 'Mittelwert', value: pricing.value.meanPrice },
-    { label: 'Empfohlen', value: pricing.value.suggestedPrice },
-    { label: 'Max', value: pricing.value.maxPrice }
-  ].filter((stat): stat is { label: string, value: number } => typeof stat.value === 'number')
-})
 </script>
