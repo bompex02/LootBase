@@ -276,19 +276,25 @@ public sealed class ItemPriceSnapshotStore(
         }
     }
 
+    // Only a "steam"-sourced row proves a real backfill already ran. Skinport
+    // seed anchors (SeedFromSkinportPeriodsAsync) are sparse single-day
+    // estimates - if they counted here, one 90-day anchor point would look
+    // like "covered" forever and permanently block the real backfill.
     private async Task<bool> HasSufficientCoverageAsync(
         string marketHashName,
         string currency,
         CancellationToken cancellationToken)
     {
         var today = DateOnly.FromDateTime(DateTime.UtcNow);
-        var oldestCapturedDate = await dbContext.ItemPriceSnapshots
-            .Where(snapshot => snapshot.MarketHashName == marketHashName && snapshot.Currency == currency)
+        var oldestSteamCapturedDate = await dbContext.ItemPriceSnapshots
+            .Where(snapshot => snapshot.MarketHashName == marketHashName &&
+                snapshot.Currency == currency &&
+                snapshot.Source == "steam")
             .OrderBy(snapshot => snapshot.CapturedDate)
             .Select(snapshot => (DateOnly?)snapshot.CapturedDate)
             .FirstOrDefaultAsync(cancellationToken);
 
-        return oldestCapturedDate is not null && oldestCapturedDate.Value <= today.AddDays(-SufficientCoverageDays);
+        return oldestSteamCapturedDate is not null && oldestSteamCapturedDate.Value <= today.AddDays(-SufficientCoverageDays);
     }
 
     private static async Task WaitForSteamThrottleAsync(CancellationToken cancellationToken)
