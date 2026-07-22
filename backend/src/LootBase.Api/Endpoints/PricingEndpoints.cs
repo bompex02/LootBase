@@ -66,9 +66,7 @@ public static class PricingEndpoints
             IPricingHistoryProvider pricingHistory,
             CancellationToken cancellationToken) =>
         {
-            var expectedSecret = steamOptions.Value.MarketBackfillSecret;
-            if (string.IsNullOrWhiteSpace(expectedSecret) ||
-                request.Headers["X-Backfill-Key"] != expectedSecret)
+            if (!IsAuthorizedForBackfill(request, steamOptions.Value))
             {
                 return Results.Unauthorized();
             }
@@ -86,9 +84,7 @@ public static class PricingEndpoints
             IServiceScopeFactory scopeFactory,
             ILoggerFactory loggerFactory) =>
         {
-            var expectedSecret = steamOptions.Value.MarketBackfillSecret;
-            if (string.IsNullOrWhiteSpace(expectedSecret) ||
-                request.Headers["X-Backfill-Key"] != expectedSecret)
+            if (!IsAuthorizedForBackfill(request, steamOptions.Value))
             {
                 return Results.Unauthorized();
             }
@@ -133,9 +129,7 @@ public static class PricingEndpoints
             IOptions<SteamOptions> steamOptions,
             IPricingHistoryProvider pricingHistory) =>
         {
-            var expectedSecret = steamOptions.Value.MarketBackfillSecret;
-            if (string.IsNullOrWhiteSpace(expectedSecret) ||
-                request.Headers["X-Backfill-Key"] != expectedSecret)
+            if (!IsAuthorizedForBackfill(request, steamOptions.Value))
             {
                 return Results.Unauthorized();
             }
@@ -145,6 +139,14 @@ public static class PricingEndpoints
         .WithTags("Pricing");
 
         return app;
+    }
+
+    // checks the X-Backfill-Key header against the configured secret; if the secret is not set, no requests are authorized
+    private static bool IsAuthorizedForBackfill(HttpRequest request, SteamOptions steamOptions)
+    {
+        var expectedSecret = steamOptions.MarketBackfillSecret;
+        return !string.IsNullOrWhiteSpace(expectedSecret) &&
+            request.Headers["X-Backfill-Key"] == expectedSecret;
     }
 
     private static IReadOnlyCollection<string> ParseMarketHashNames(IEnumerable<string>? marketHashNames)
