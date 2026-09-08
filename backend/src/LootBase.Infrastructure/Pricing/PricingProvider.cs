@@ -140,6 +140,29 @@ public sealed class PricingProvider(
     public Task<int?> BackfillFromSteamAsync(string marketHashName, CancellationToken cancellationToken) =>
         snapshotStore.BackfillFromSteamAsync(marketHashName, cancellationToken);
 
+    public async Task<int> SnapshotAllAsync(string currency, CancellationToken cancellationToken)
+    {
+        var catalog = await GetCatalogAsync(currency, cancellationToken);
+        if (catalog is null)
+        {
+            logger.LogWarning("Snapshot-all aborted: Skinport catalog unavailable.");
+            return 0;
+        }
+
+        var items = catalog.Items.Values
+            .Select(entry => new DailySnapshotItemDto(
+                entry.MarketHashName,
+                entry.Last24Hours?.Price,
+                entry.Last24Hours?.Volume ?? 0))
+            .ToList();
+
+        var written = await snapshotStore.RecordDailySnapshotsBatchAsync(currency, items, cancellationToken);
+        logger.LogInformation(
+            "Snapshot-all wrote {Written}/{Total} rows for {Currency} (rest already captured today).",
+            written, items.Count, currency);
+        return written;
+    }
+
     public async Task BackfillAllFromSteamAsync(string currency, CancellationToken cancellationToken)
     {
         var catalog = await GetCatalogAsync(currency, cancellationToken);

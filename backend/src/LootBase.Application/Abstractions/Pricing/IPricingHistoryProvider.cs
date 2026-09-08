@@ -16,6 +16,13 @@ public interface IPricingHistoryProvider
     // it fire-and-forget, not on a request path
     Task BackfillAllFromSteamAsync(string currency, CancellationToken cancellationToken);
 
+    // Writes today's snapshot for every item in the Skinport catalog in one
+    // batch (a handful of DB round trips, not one per item) so history stays
+    // gapless regardless of which items got page views today. Fast enough to
+    // run synchronously within a single request; meant to be hit by an
+    // external daily scheduler. Returns the number of rows written.
+    Task<int> SnapshotAllAsync(string currency, CancellationToken cancellationToken);
+
     // Snapshot of the current (or last) bulk run. Resets on restart
     BulkBackfillStatusDto GetBulkBackfillStatus();
 

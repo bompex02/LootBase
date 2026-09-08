@@ -66,7 +66,7 @@ public static class PricingEndpoints
             IPricingHistoryProvider pricingHistory,
             CancellationToken cancellationToken) =>
         {
-            if (!IsAuthorizedForBackfill(request, steamOptions.Value))
+            if (!IsAuthorizedForPricingOps(request, steamOptions.Value))
             {
                 return Results.Unauthorized();
             }
@@ -84,7 +84,7 @@ public static class PricingEndpoints
             IServiceScopeFactory scopeFactory,
             ILoggerFactory loggerFactory) =>
         {
-            if (!IsAuthorizedForBackfill(request, steamOptions.Value))
+            if (!IsAuthorizedForPricingOps(request, steamOptions.Value))
             {
                 return Results.Unauthorized();
             }
@@ -124,12 +124,32 @@ public static class PricingEndpoints
         })
         .WithTags("Pricing");
 
+        // Meant for an external daily scheduler (e.g. a cron job hitting this
+        // URL) - unlike backfill-all this runs to completion within the
+        // request, no fire-and-forget background task involved.
+        app.MapPost("/api/pricing/snapshot-all", async (
+            HttpRequest request,
+            string? currency,
+            IOptions<SteamOptions> steamOptions,
+            IPricingHistoryProvider pricingHistory,
+            CancellationToken cancellationToken) =>
+        {
+            if (!IsAuthorizedForPricingOps(request, steamOptions.Value))
+            {
+                return Results.Unauthorized();
+            }
+
+            var written = await pricingHistory.SnapshotAllAsync(currency ?? "EUR", cancellationToken);
+            return Results.Ok(new { written });
+        })
+        .WithTags("Pricing");
+
         app.MapGet("/api/pricing/backfill-all/status", (
             HttpRequest request,
             IOptions<SteamOptions> steamOptions,
             IPricingHistoryProvider pricingHistory) =>
         {
-            if (!IsAuthorizedForBackfill(request, steamOptions.Value))
+            if (!IsAuthorizedForPricingOps(request, steamOptions.Value))
             {
                 return Results.Unauthorized();
             }
@@ -141,8 +161,10 @@ public static class PricingEndpoints
         return app;
     }
 
-    // checks the X-Backfill-Key header against the configured secret; if the secret is not set, no requests are authorized
-    private static bool IsAuthorizedForBackfill(HttpRequest request, SteamOptions steamOptions)
+    // Gates every internal pricing job (backfill + snapshot-all), not just
+    // backfill - checks the X-Backfill-Key header against the configured
+    // secret; if the secret is not set, no requests are authorized
+    private static bool IsAuthorizedForPricingOps(HttpRequest request, SteamOptions steamOptions)
     {
         var expectedSecret = steamOptions.MarketBackfillSecret;
         return !string.IsNullOrWhiteSpace(expectedSecret) &&
