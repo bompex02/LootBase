@@ -10,13 +10,8 @@ public sealed class ItemPriceSnapshot
 
     public DateOnly CapturedDate { get; set; }
 
-    public decimal? MinPrice { get; set; }
-
-    public decimal? MedianPrice { get; set; }
-
-    public decimal? MeanPrice { get; set; }
-
-    public decimal? MaxPrice { get; set; }
+    // Average price for item
+    public decimal? Price { get; set; }
 
     public int Quantity { get; set; }
 

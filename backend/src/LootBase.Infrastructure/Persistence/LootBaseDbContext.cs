@@ -71,10 +71,7 @@ public sealed class LootBaseDbContext(DbContextOptions<LootBaseDbContext> option
             snapshot.HasIndex(x => new { x.MarketHashName, x.Currency, x.CapturedDate }).IsUnique();
             snapshot.Property(x => x.MarketHashName).HasMaxLength(240);
             snapshot.Property(x => x.Currency).HasMaxLength(3);
-            snapshot.Property(x => x.MinPrice).HasPrecision(18, 2);
-            snapshot.Property(x => x.MedianPrice).HasPrecision(18, 2);
-            snapshot.Property(x => x.MeanPrice).HasPrecision(18, 2);
-            snapshot.Property(x => x.MaxPrice).HasPrecision(18, 2);
+            snapshot.Property(x => x.Price).HasPrecision(18, 2);
             snapshot.Property(x => x.Source).HasMaxLength(16);
         });
 

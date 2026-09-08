@@ -199,19 +199,13 @@ const selectedDuration = ref<PricingHistoryPeriodKey>('90d')
 const dailyPointFormatter = new Intl.DateTimeFormat('de-DE', { day: '2-digit', month: '2-digit' })
 
 interface ChartPointSource {
-  minPrice?: number | null
-  maxPrice?: number | null
-  avgPrice?: number | null
-  medianPrice?: number | null
+  price?: number | null
 }
 
 const toChartPoint = (key: string, label: string, source: ChartPointSource, volume: number): PriceHistoryChartPoint => ({
   key,
   label,
-  min: source.minPrice ?? null,
-  max: source.maxPrice ?? null,
-  avg: source.avgPrice ?? null,
-  median: source.medianPrice ?? null,
+  price: source.price ?? null,
   volume
 })
 

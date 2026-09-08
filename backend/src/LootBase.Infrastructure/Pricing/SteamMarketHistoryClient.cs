@@ -88,6 +88,7 @@ public sealed class SteamMarketHistoryClient(
         return "EUR";
     }
 
+    // Steam gives one price per sale; we aggregate same-day sales into an average
     private static IReadOnlyList<SteamMarketDailyPricePoint> ParsePoints(JsonElement pricesElement)
     {
         var byDate = new Dictionary<DateOnly, (decimal PriceSum, int PriceCount, int Volume)>();

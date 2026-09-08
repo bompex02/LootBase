@@ -46,10 +46,8 @@ export interface PlayerProfile {
 export interface PricingItem {
   marketHashName: string
   currency: string
-  meanPrice?: number | null
-  medianPrice?: number | null
-  minPrice?: number | null
-  maxPrice?: number | null
+  /** Average price over the source window*/
+  price?: number | null
   itemPage?: string | null
   marketPage?: string | null
   source: string
@@ -60,19 +58,15 @@ export type PricingHistoryPeriodKey = '24h' | '7d' | '30d' | '90d'
 
 export interface PricingHistoryPeriod {
   period: PricingHistoryPeriodKey
-  minPrice?: number | null
-  maxPrice?: number | null
-  avgPrice?: number | null
-  medianPrice?: number | null
+  /** Average price over the period, not a single quote */
+  price?: number | null
   volume: number
 }
 
 export interface PricingHistoryDailyPoint {
   date: string
-  minPrice?: number | null
-  maxPrice?: number | null
-  avgPrice?: number | null
-  medianPrice?: number | null
+  /** Average price over that day, not a single quote */
+  price?: number | null
   quantity: number
 }
 

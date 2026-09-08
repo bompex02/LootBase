@@ -1,6 +1,7 @@
 namespace LootBase.Application.Abstractions.Pricing;
 
-public sealed record SteamMarketDailyPricePoint(DateOnly Date, decimal MedianPrice, int Volume);
+// Price is the average of that day's sales, not a single quote
+public sealed record SteamMarketDailyPricePoint(DateOnly Date, decimal Price, int Volume);
 
 public sealed record SteamMarketHistoryDto(string Currency, IReadOnlyList<SteamMarketDailyPricePoint> Points);
 

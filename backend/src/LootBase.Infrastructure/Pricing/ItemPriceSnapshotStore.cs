@@ -85,10 +85,7 @@ public sealed class ItemPriceSnapshotStore(
     public async Task RecordDailySnapshotAsync(
         string marketHashName,
         string currency,
-        decimal? minPrice,
-        decimal? medianPrice,
-        decimal? meanPrice,
-        decimal? maxPrice,
+        decimal? price,
         int quantity,
         CancellationToken cancellationToken)
     {
@@ -115,19 +112,13 @@ public sealed class ItemPriceSnapshotStore(
                     MarketHashName = marketHashName,
                     Currency = currency,
                     CapturedDate = today,
-                    MinPrice = minPrice,
-                    MedianPrice = medianPrice,
-                    MeanPrice = meanPrice,
-                    MaxPrice = maxPrice,
+                    Price = price,
                     Quantity = quantity
                 });
             }
             else
             {
-                existing.MinPrice = minPrice;
-                existing.MedianPrice = medianPrice;
-                existing.MeanPrice = meanPrice;
-                existing.MaxPrice = maxPrice;
+                existing.Price = price;
                 existing.Quantity = quantity;
             }
 
@@ -138,6 +129,43 @@ public sealed class ItemPriceSnapshotStore(
         {
             logger.LogWarning(ex, "Recording daily price snapshot for {MarketHashName} failed.", marketHashName);
         }
+    }
+
+    // Same job as RecordDailySnapshotAsync, but for the whole catalog at once:
+    // one query to see what's already captured today, one bulk insert for
+    // the rest - instead of one SELECT + SaveChanges per item.
+    public async Task<int> RecordDailySnapshotsBatchAsync(
+        string currency,
+        IReadOnlyList<DailySnapshotItemDto> items,
+        CancellationToken cancellationToken)
+    {
+        var today = DateOnly.FromDateTime(DateTime.UtcNow);
+
+        var alreadyCaptured = await dbContext.ItemPriceSnapshots
+            .Where(snapshot => snapshot.Currency == currency && snapshot.CapturedDate == today)
+            .Select(snapshot => snapshot.MarketHashName)
+            .ToHashSetAsync(StringComparer.OrdinalIgnoreCase, cancellationToken);
+
+        var newSnapshots = items
+            .Where(item => !alreadyCaptured.Contains(item.MarketHashName))
+            .Select(item => new ItemPriceSnapshot
+            {
+                MarketHashName = item.MarketHashName,
+                Currency = currency,
+                CapturedDate = today,
+                Price = item.Price,
+                Quantity = item.Quantity
+            })
+            .ToList();
+
+        if (newSnapshots.Count == 0)
+        {
+            return 0;
+        }
+
+        dbContext.ItemPriceSnapshots.AddRange(newSnapshots);
+        await dbContext.SaveChangesAsync(cancellationToken);
+        return newSnapshots.Count;
     }
 
     public async Task<IReadOnlyList<PricingHistoryDailyPointDto>> GetDailySnapshotsAsync(
@@ -158,10 +186,7 @@ public sealed class ItemPriceSnapshotStore(
         return snapshots
             .Select(snapshot => new PricingHistoryDailyPointDto(
                 snapshot.CapturedDate,
-                snapshot.MinPrice,
-                snapshot.MaxPrice,
-                snapshot.MeanPrice,
-                snapshot.MedianPrice,
+                snapshot.Price,
                 snapshot.Quantity))
             .ToList();
     }
@@ -201,10 +226,7 @@ public sealed class ItemPriceSnapshotStore(
                 MarketHashName = marketHashName,
                 Currency = currency,
                 CapturedDate = date,
-                MinPrice = period.MinPrice,
-                MedianPrice = period.MedianPrice,
-                MeanPrice = period.AvgPrice,
-                MaxPrice = period.MaxPrice,
+                Price = period.Price,
                 Quantity = period.Volume,
                 Source = "skinport_period"
             });
@@ -342,7 +364,7 @@ public sealed class ItemPriceSnapshotStore(
                 MarketHashName = marketHashName,
                 Currency = data.Currency,
                 CapturedDate = point.Date,
-                MedianPrice = point.MedianPrice,
+                Price = point.Price,
                 Quantity = point.Volume,
                 Source = "steam"
             });

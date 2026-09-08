@@ -33,7 +33,7 @@ public sealed class PricingProvider(
             return null;
         }
 
-        var amount = item.MedianPrice ?? item.MeanPrice ?? item.MinPrice ?? item.MaxPrice;
+        var amount = item.Price;
 
         return amount is null
             ? null
@@ -91,7 +91,7 @@ public sealed class PricingProvider(
 
         await snapshotStore.RecordDailySnapshotAsync(
             item.MarketHashName, item.Currency,
-            entry.Last24Hours?.Min, entry.Last24Hours?.Median, entry.Last24Hours?.Avg, entry.Last24Hours?.Max, entry.Last24Hours?.Volume ?? 0,
+            entry.Last24Hours?.Price, entry.Last24Hours?.Volume ?? 0,
             cancellationToken);
 
         return item;
@@ -116,7 +116,7 @@ public sealed class PricingProvider(
         {
             await snapshotStore.RecordDailySnapshotAsync(
                 marketHashName, currency,
-                today.MinPrice, today.MedianPrice, today.AvgPrice, today.MaxPrice, today.Volume,
+                today.Price, today.Volume,
                 cancellationToken);
         }
 
@@ -256,10 +256,7 @@ public sealed class PricingProvider(
         return new PricingCatalogItemDto(
             entry.MarketHashName,
             string.IsNullOrWhiteSpace(entry.Currency) ? currency : entry.Currency,
-            window?.Avg,
-            window?.Median,
-            window?.Min,
-            window?.Max,
+            window?.Price,
             entry.ItemPage,
             entry.MarketPage,
             "skinport",
@@ -285,7 +282,7 @@ public sealed class PricingProvider(
             return;
         }
 
-        periods.Add(new PricingHistoryPeriodDto(period, stats.Min, stats.Max, stats.Avg, stats.Median, stats.Volume));
+        periods.Add(new PricingHistoryPeriodDto(period, stats.Price, stats.Volume));
     }
 
     private async Task<CatalogSnapshot?> GetCatalogAsync(string currency, CancellationToken cancellationToken)
@@ -407,17 +404,8 @@ public sealed class PricingProvider(
 
     private sealed record SkinportPeriodStatsDto
     {
-        [JsonPropertyName("min")]
-        public decimal? Min { get; init; }
-
-        [JsonPropertyName("max")]
-        public decimal? Max { get; init; }
-
         [JsonPropertyName("avg")]
-        public decimal? Avg { get; init; }
-
-        [JsonPropertyName("median")]
-        public decimal? Median { get; init; }
+        public decimal? Price { get; init; }
 
         [JsonPropertyName("volume")]
         public int Volume { get; init; }

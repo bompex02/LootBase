@@ -1,20 +1,5 @@
 <template>
   <div class="space-y-3">
-    <div class="flex flex-wrap items-center gap-x-4 gap-y-1 text-[11px] text-zinc-500">
-      <span class="flex items-center gap-1.5">
-        <span class="inline-block h-0.5 w-3 rounded-full" :style="{ backgroundColor: color }" />
-        Median
-      </span>
-      <span class="flex items-center gap-1.5">
-        <span class="inline-block h-0.5 w-3 rounded-full bg-zinc-500" />
-        Ø Durchschnitt
-      </span>
-      <span class="flex items-center gap-1.5">
-        <span class="inline-block h-2.5 w-3 rounded-sm" :style="{ backgroundColor: color, opacity: 0.18 }" />
-        Min&ndash;Max Bereich
-      </span>
-    </div>
-
     <div v-if="points.length < 2" class="text-sm text-zinc-500">
       Für diesen Zeitraum liegen nicht genug Daten für einen Verlauf vor.
     </div>
@@ -47,11 +32,7 @@
             >{{ formatCurrency(grid.value, currency) }}</text>
           </g>
 
-          <path :d="bandPath" :fill="color" :opacity="0.18" stroke="none" />
-
-          <path :d="linePath(points.map(p => p.avg))" fill="none" stroke="#71717a" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" />
-
-          <path :d="linePath(points.map(p => p.median))" fill="none" :stroke="color" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" />
+          <path :d="linePath" fill="none" :stroke="color" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" />
 
           <g>
             <circle
@@ -76,14 +57,14 @@
           </g>
 
           <text
-            v-if="lastPoint?.median != null"
+            v-if="lastPoint?.price != null"
             :x="xFor(points.length - 1)"
-            :y="yFor(lastPoint.median) - 10"
+            :y="yFor(lastPoint.price) - 10"
             text-anchor="end"
             class="fill-zinc-100"
             font-size="11"
             font-weight="600"
-          >{{ formatCurrency(lastPoint.median, currency) }}</text>
+          >{{ formatCurrency(lastPoint.price, currency) }}</text>
 
           <g>
             <template v-for="{ index, point } in labeledPoints" :key="`x-label-${point.key}`">
@@ -124,10 +105,7 @@
         >
           <p class="mb-1 font-medium text-zinc-100">{{ hoveredPoint.label }}</p>
           <dl class="grid grid-cols-[auto_auto] gap-x-3 gap-y-0.5 text-zinc-400">
-            <dt>Min</dt><dd class="text-right text-zinc-200">{{ formatOrDash(hoveredPoint.min) }}</dd>
-            <dt>Median</dt><dd class="text-right text-zinc-200">{{ formatOrDash(hoveredPoint.median) }}</dd>
-            <dt>Ø Avg</dt><dd class="text-right text-zinc-200">{{ formatOrDash(hoveredPoint.avg) }}</dd>
-            <dt>Max</dt><dd class="text-right text-zinc-200">{{ formatOrDash(hoveredPoint.max) }}</dd>
+            <dt>Preis</dt><dd class="text-right text-zinc-200">{{ formatOrDash(hoveredPoint.price) }}</dd>
             <dt>Verkäufe</dt><dd class="text-right text-zinc-200">{{ hoveredPoint.volume }}</dd>
           </dl>
         </div>
@@ -143,20 +121,14 @@
         <thead>
           <tr class="text-zinc-500">
             <th class="py-1 pr-3 font-normal">Zeitraum</th>
-            <th class="py-1 pr-3 font-normal">Min</th>
-            <th class="py-1 pr-3 font-normal">Median</th>
-            <th class="py-1 pr-3 font-normal">Ø Avg</th>
-            <th class="py-1 pr-3 font-normal">Max</th>
+            <th class="py-1 pr-3 font-normal">Preis</th>
             <th class="py-1 font-normal">Verkäufe</th>
           </tr>
         </thead>
         <tbody>
           <tr v-for="point in points" :key="point.key" class="border-t border-zinc-800 text-zinc-300">
             <td class="py-1 pr-3">{{ point.label }}</td>
-            <td class="py-1 pr-3">{{ formatOrDash(point.min) }}</td>
-            <td class="py-1 pr-3">{{ formatOrDash(point.median) }}</td>
-            <td class="py-1 pr-3">{{ formatOrDash(point.avg) }}</td>
-            <td class="py-1 pr-3">{{ formatOrDash(point.max) }}</td>
+            <td class="py-1 pr-3">{{ formatOrDash(point.price) }}</td>
             <td class="py-1">{{ point.volume }}</td>
           </tr>
         </tbody>
@@ -169,10 +141,8 @@
 export interface PriceHistoryChartPoint {
   key: string
   label: string
-  min: number | null
-  max: number | null
-  avg: number | null
-  median: number | null
+  /** Average price over that point's window, not a single quote */
+  price: number | null
   volume: number
 }
 
@@ -215,11 +185,11 @@ const labeledPoints = computed(() => labeledIndices.value
 const showVolumeLabels = computed(() => points.value.length <= MAX_LABELS)
 
 const markers = computed(() => labeledPoints.value
-  .filter(({ point }) => point.median !== null)
+  .filter(({ point }) => point.price !== null)
   .map(({ index, point }) => ({
     key: point.key,
     x: xFor(index),
-    y: yFor(point.median as number)
+    y: yFor(point.price as number)
   })))
 
 const hoveredMarker = computed(() => {
@@ -229,25 +199,25 @@ const hoveredMarker = computed(() => {
   }
 
   const point = points.value[index]
-  if (!point || point.median === null) {
+  if (!point || point.price === null) {
     return null
   }
 
-  return { key: point.key, x: xFor(index), y: yFor(point.median) }
+  return { key: point.key, x: xFor(index), y: yFor(point.price) }
 })
 
-const robustValues = computed(() =>
+const priceValues = computed(() =>
   points.value
-    .flatMap(point => [point.median, point.avg])
+    .map(point => point.price)
     .filter((value): value is number => typeof value === 'number'))
 
 const yDomain = computed(() => {
-  if (robustValues.value.length === 0) {
+  if (priceValues.value.length === 0) {
     return { min: 0, max: 1 }
   }
 
-  const min = Math.min(...robustValues.value)
-  const max = Math.max(...robustValues.value)
+  const min = Math.min(...priceValues.value)
+  const max = Math.max(...priceValues.value)
   const pad = (max - min) * 0.25 || max * 0.15 || 1
 
   return { min: Math.max(0, min - pad), max: max + pad }
@@ -272,35 +242,15 @@ const labelAnchor = (index: number): 'start' | 'middle' | 'end' => {
   return index === points.value.length - 1 ? 'end' : 'middle'
 }
 
-const linePath = (values: (number | null)[]) => {
+const linePath = computed(() => {
   const segments: string[] = []
-  values.forEach((value, index) => {
-    if (value === null) {
+  points.value.forEach((point, index) => {
+    if (point.price === null) {
       return
     }
-    segments.push(`${segments.length === 0 ? 'M' : 'L'} ${xFor(index)} ${yFor(value)}`)
+    segments.push(`${segments.length === 0 ? 'M' : 'L'} ${xFor(index)} ${yFor(point.price)}`)
   })
   return segments.join(' ')
-}
-
-const bandPath = computed(() => {
-  const pts = points.value
-  if (pts.length < 2) {
-    return ''
-  }
-
-  const top = pts.map((point, index) => {
-    const value = point.max ?? point.median
-    return value === null ? null : `${index === 0 ? 'M' : 'L'} ${xFor(index)} ${yFor(value)}`
-  }).filter(Boolean)
-
-  const bottom = [...pts].reverse().map((point, reversedIndex) => {
-    const index = pts.length - 1 - reversedIndex
-    const value = point.min ?? point.median
-    return value === null ? null : `L ${xFor(index)} ${yFor(value)}`
-  }).filter(Boolean)
-
-  return [...top, ...bottom, 'Z'].join(' ')
 })
 
 const gridLines = computed(() => {
