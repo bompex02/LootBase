@@ -12,7 +12,7 @@ using Npgsql.EntityFrameworkCore.PostgreSQL.Metadata;
 namespace LootBase.Infrastructure.Persistence.Migrations
 {
     [DbContext(typeof(LootBaseDbContext))]
-    [Migration("20260704221450_InitialCreate")]
+    [Migration("20260908203530_InitialCreate")]
     partial class InitialCreate
     {
         /// <inheritdoc />
@@ -131,6 +131,45 @@ namespace LootBase.Infrastructure.Persistence.Migrations
                     b.ToTable("InventorySnapshots");
                 });
 
+            modelBuilder.Entity("LootBase.Domain.Pricing.ItemPriceSnapshot", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid");
+
+                    b.Property<DateOnly>("CapturedDate")
+                        .HasColumnType("date");
+
+                    b.Property<string>("Currency")
+                        .IsRequired()
+                        .HasMaxLength(3)
+                        .HasColumnType("character varying(3)");
+
+                    b.Property<string>("MarketHashName")
+                        .IsRequired()
+                        .HasMaxLength(240)
+                        .HasColumnType("character varying(240)");
+
+                    b.Property<decimal?>("Price")
+                        .HasPrecision(18, 2)
+                        .HasColumnType("numeric(18,2)");
+
+                    b.Property<int>("Quantity")
+                        .HasColumnType("integer");
+
+                    b.Property<string>("Source")
+                        .IsRequired()
+                        .HasMaxLength(16)
+                        .HasColumnType("character varying(16)");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("MarketHashName", "Currency", "CapturedDate")
+                        .IsUnique();
+
+                    b.ToTable("ItemPriceSnapshots");
+                });
+
             modelBuilder.Entity("LootBase.Domain.Users.User", b =>
                 {
                     b.Property<Guid>("Id")
@@ -166,6 +205,23 @@ namespace LootBase.Infrastructure.Persistence.Migrations
                         .IsUnique();
 
                     b.ToTable("Users");
+                });
+
+            modelBuilder.Entity("LootBase.Infrastructure.Auth.Steam.SteamMarketCredential", b =>
+                {
+                    b.Property<int>("Id")
+                        .HasColumnType("integer");
+
+                    b.Property<string>("RefreshToken")
+                        .IsRequired()
+                        .HasColumnType("text");
+
+                    b.Property<DateTimeOffset>("UpdatedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.HasKey("Id");
+
+                    b.ToTable("SteamMarketCredentials");
                 });
 
             modelBuilder.Entity("LootBase.Domain.Inventory.InventoryItem", b =>
