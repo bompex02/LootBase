@@ -26,6 +26,10 @@ public sealed partial class SteamOpenIdService(
         return new Uri($"{ProviderUrl}?{ToQueryString(query)}");
     }
 
+    /**
+     * Validates the OpenID callback query parameters returned by Steam.
+     * Returns a SteamLoginValidationResult indicating whether the validation was successful.
+     */
     public async Task<SteamLoginValidationResult> ValidateCallbackAsync(
         IReadOnlyDictionary<string, string> query,
         CancellationToken cancellationToken)
@@ -38,6 +42,15 @@ public sealed partial class SteamOpenIdService(
         if (!query.TryGetValue("openid.claimed_id", out var claimedId))
         {
             return SteamLoginValidationResult.Invalid("Steam response did not include a claimed identity.");
+        }
+
+        // Without this check, a valid assertion issued for a different
+        // return_to (e.g. captured from another site) would still pass
+        // Steam's check_authentication and could be replayed here
+        if (!query.TryGetValue("openid.return_to", out var returnTo) ||
+            !string.Equals(returnTo, options.ReturnUrl, StringComparison.Ordinal))
+        {
+            return SteamLoginValidationResult.Invalid("Steam response was not issued for this application.");
         }
 
         var steamId64 = ExtractSteamId64(claimedId);

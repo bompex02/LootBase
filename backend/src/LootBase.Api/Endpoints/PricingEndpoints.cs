@@ -1,4 +1,8 @@
+using System.Security.Cryptography;
+using System.Text;
 using LootBase.Application.Abstractions.Pricing;
+using LootBase.Infrastructure.Auth.Steam;
+using Microsoft.Extensions.Options;
 
 namespace LootBase.Api.Endpoints;
 
@@ -15,7 +19,7 @@ public static class PricingEndpoints
             var names = ParseMarketHashNames(marketHashNames);
             if (names.Count == 0)
             {
-                return Results.BadRequest("Provide at least one marketHashNames value.");
+                return Results.BadRequest(new { error = "Provide at least one marketHashNames value." });
             }
 
             var items = await pricingCatalog.GetItemsAsync(
@@ -42,7 +46,134 @@ public static class PricingEndpoints
         })
         .WithTags("Pricing");
 
+        app.MapGet("/api/pricing/history/{*marketHashName}", async (
+            string marketHashName,
+            string? currency,
+            IPricingHistoryProvider pricingHistory,
+            CancellationToken cancellationToken) =>
+        {
+            var history = await pricingHistory.GetHistoryAsync(
+                marketHashName,
+                currency ?? "EUR",
+                cancellationToken);
+
+            return history is null ? Results.NotFound() : Results.Ok(history);
+        })
+        .WithTags("Pricing");
+
+        app.MapPost("/api/pricing/backfill/{*marketHashName}", async (
+            string marketHashName,
+            HttpRequest request,
+            IOptions<SteamOptions> steamOptions,
+            IPricingHistoryProvider pricingHistory,
+            CancellationToken cancellationToken) =>
+        {
+            if (!IsAuthorizedForPricingOps(request, steamOptions.Value))
+            {
+                return Results.Unauthorized();
+            }
+
+            var imported = await pricingHistory.BackfillFromSteamAsync(marketHashName, cancellationToken);
+            return Results.Ok(new { imported = imported ?? 0, success = imported is not null });
+        })
+        .WithTags("Pricing");
+
+        app.MapPost("/api/pricing/backfill-all", (
+            HttpRequest request,
+            string? currency,
+            IOptions<SteamOptions> steamOptions,
+            IPricingHistoryProvider pricingHistory,
+            IServiceScopeFactory scopeFactory,
+            ILoggerFactory loggerFactory) =>
+        {
+            if (!IsAuthorizedForPricingOps(request, steamOptions.Value))
+            {
+                return Results.Unauthorized();
+            }
+
+            if (!pricingHistory.TryStartBulkBackfill())
+            {
+                return Results.Conflict(new
+                {
+                    started = false,
+                    note = "A bulk backfill is already running; not starting a second one.",
+                    status = pricingHistory.GetBulkBackfillStatus()
+                });
+            }
+
+            var effectiveCurrency = currency ?? "EUR";
+            var logger = loggerFactory.CreateLogger("PricingBulkBackfill");
+
+            _ = Task.Run(async () =>
+            {
+                using var scope = scopeFactory.CreateScope();
+                try
+                {
+                    var historyProvider = scope.ServiceProvider.GetRequiredService<IPricingHistoryProvider>();
+                    await historyProvider.BackfillAllFromSteamAsync(effectiveCurrency, CancellationToken.None);
+                }
+                catch (Exception ex)
+                {
+                    logger.LogError(ex, "Bulk Steam backfill crashed.");
+                }
+            });
+
+            return Results.Accepted(value: new
+            {
+                started = true,
+                note = "Runs in the background over every Skinport-known item; watch the API logs for progress."
+            });
+        })
+        .WithTags("Pricing");
+
+        // Meant for an external daily scheduler (e.g. a cron job hitting this
+        // URL) - unlike backfill-all this runs to completion within the
+        // request, no fire-and-forget background task involved.
+        app.MapPost("/api/pricing/snapshot-all", async (
+            HttpRequest request,
+            string? currency,
+            IOptions<SteamOptions> steamOptions,
+            IPricingHistoryProvider pricingHistory,
+            CancellationToken cancellationToken) =>
+        {
+            if (!IsAuthorizedForPricingOps(request, steamOptions.Value))
+            {
+                return Results.Unauthorized();
+            }
+
+            var written = await pricingHistory.SnapshotAllAsync(currency ?? "EUR", cancellationToken);
+            return Results.Ok(new { written });
+        })
+        .WithTags("Pricing");
+
+        app.MapGet("/api/pricing/backfill-all/status", (
+            HttpRequest request,
+            IOptions<SteamOptions> steamOptions,
+            IPricingHistoryProvider pricingHistory) =>
+        {
+            if (!IsAuthorizedForPricingOps(request, steamOptions.Value))
+            {
+                return Results.Unauthorized();
+            }
+
+            return Results.Ok(pricingHistory.GetBulkBackfillStatus());
+        })
+        .WithTags("Pricing");
+
         return app;
+    }
+
+    // Gates every internal pricing job (backfill + snapshot-all), not just
+    // backfill - checks the X-Backfill-Key header against the configured
+    // secret; if the secret is not set, no requests are authorized
+    private static bool IsAuthorizedForPricingOps(HttpRequest request, SteamOptions steamOptions)
+    {
+        var expectedSecret = steamOptions.MarketBackfillSecret;
+        var providedSecret = request.Headers["X-Backfill-Key"].ToString();
+        return !string.IsNullOrWhiteSpace(expectedSecret) &&
+            CryptographicOperations.FixedTimeEquals(
+                Encoding.UTF8.GetBytes(providedSecret),
+                Encoding.UTF8.GetBytes(expectedSecret));
     }
 
     private static IReadOnlyCollection<string> ParseMarketHashNames(IEnumerable<string>? marketHashNames)

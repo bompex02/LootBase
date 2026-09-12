@@ -1,0 +1,13 @@
+{
+  "name": "steam-refresh-token",
+  "private": true,
+  "version": "1.0.0",
+  "description": "One-off CLI to log into Steam and print a refresh token for Steam__MarketRefreshToken",
+  "main": "get-refresh-token.js",
+  "scripts": {
+    "start": "node get-refresh-token.js"
+  },
+  "dependencies": {
+    "steam-session": "^1.9.4"
+  }
+}

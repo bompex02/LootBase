@@ -2,6 +2,7 @@ using System.Security.Claims;
 using LootBase.Application.Abstractions.Inventory;
 using LootBase.Application.Players;
 using LootBase.Domain.Games;
+using LootBase.Infrastructure.Inventory;
 
 namespace LootBase.Api.Endpoints;
 
@@ -36,12 +37,34 @@ public static class PlayerEndpoints
                 return Results.Forbid();
             }
 
-            var profile = await refreshService.RefreshAsync(
-                steamId64,
-                SteamGames.CounterStrike2,
-                cancellationToken);
+            try
+            {
+                var profile = await refreshService.RefreshAsync(
+                    steamId64,
+                    SteamGames.CounterStrike2,
+                    cancellationToken);
 
-            return Results.Ok(profile);
+                return Results.Ok(profile);
+            }
+            catch (InvalidOperationException ex) when (ex.Message == Cs2SteamInventoryProvider.RateLimitMessage)
+            {
+                return Results.Json(
+                    new { code = "steam_rate_limited", error = ex.Message },
+                    statusCode: StatusCodes.Status429TooManyRequests);
+            }
+            catch (InvalidOperationException ex) when (ex.Message == Cs2SteamInventoryProvider.InventoryPrivateMessage)
+            {
+                return Results.Json(
+                    new { code = "steam_inventory_private", error = ex.Message },
+                    statusCode: StatusCodes.Status400BadRequest);
+            }
+            catch (InvalidOperationException ex) when (
+                ex.Message.StartsWith(Cs2SteamInventoryProvider.InventoryRequestFailedMessage, StringComparison.Ordinal))
+            {
+                return Results.Json(
+                    new { code = "steam_inventory_error", error = ex.Message },
+                    statusCode: StatusCodes.Status502BadGateway);
+            }
         })
         .RequireAuthorization()
         .WithTags("Players");

@@ -9,10 +9,11 @@ services:
     envVars:
       - key: ASPNETCORE_ENVIRONMENT
         value: Production
+      # DB is Neon, not a Render-managed database (their free Postgres
+      # expires after 30 days) - set the connection string manually in the
+      # Render dashboard instead of wiring it to `databases:` below.
       - key: ConnectionStrings__LootBase
-        fromDatabase:
-          name: lootbase-db
-          property: connectionString
+        sync: false
       # Set these manually in the Render dashboard after the first deploy,
       # once you know the actual public URLs of both services:
       - key: Steam__Realm
@@ -37,9 +38,3 @@ services:
       # (Render internal address if available, otherwise its public URL).
       - key: NUXT_API_BASE
         sync: false
-
-databases:
-  - name: lootbase-db
-    plan: free
-    databaseName: lootbase
-    user: lootbase

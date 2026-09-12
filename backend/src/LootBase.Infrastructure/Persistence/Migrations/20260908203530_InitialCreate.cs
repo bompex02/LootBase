@@ -12,6 +12,36 @@ namespace LootBase.Infrastructure.Persistence.Migrations
         protected override void Up(MigrationBuilder migrationBuilder)
         {
             migrationBuilder.CreateTable(
+                name: "ItemPriceSnapshots",
+                columns: table => new
+                {
+                    Id = table.Column<Guid>(type: "uuid", nullable: false),
+                    MarketHashName = table.Column<string>(type: "character varying(240)", maxLength: 240, nullable: false),
+                    Currency = table.Column<string>(type: "character varying(3)", maxLength: 3, nullable: false),
+                    CapturedDate = table.Column<DateOnly>(type: "date", nullable: false),
+                    Price = table.Column<decimal>(type: "numeric(18,2)", precision: 18, scale: 2, nullable: true),
+                    Quantity = table.Column<int>(type: "integer", nullable: false),
+                    Source = table.Column<string>(type: "character varying(16)", maxLength: 16, nullable: false)
+                },
+                constraints: table =>
+                {
+                    table.PrimaryKey("PK_ItemPriceSnapshots", x => x.Id);
+                });
+
+            migrationBuilder.CreateTable(
+                name: "SteamMarketCredentials",
+                columns: table => new
+                {
+                    Id = table.Column<int>(type: "integer", nullable: false),
+                    RefreshToken = table.Column<string>(type: "text", nullable: false),
+                    UpdatedAt = table.Column<DateTimeOffset>(type: "timestamp with time zone", nullable: false)
+                },
+                constraints: table =>
+                {
+                    table.PrimaryKey("PK_SteamMarketCredentials", x => x.Id);
+                });
+
+            migrationBuilder.CreateTable(
                 name: "Users",
                 columns: table => new
                 {
@@ -94,6 +124,12 @@ namespace LootBase.Infrastructure.Persistence.Migrations
                 columns: new[] { "UserId", "AppId", "CapturedAt" });
 
             migrationBuilder.CreateIndex(
+                name: "IX_ItemPriceSnapshots_MarketHashName_Currency_CapturedDate",
+                table: "ItemPriceSnapshots",
+                columns: new[] { "MarketHashName", "Currency", "CapturedDate" },
+                unique: true);
+
+            migrationBuilder.CreateIndex(
                 name: "IX_Users_SteamId64",
                 table: "Users",
                 column: "SteamId64",
@@ -108,6 +144,12 @@ namespace LootBase.Infrastructure.Persistence.Migrations
 
             migrationBuilder.DropTable(
                 name: "InventorySnapshots");
+
+            migrationBuilder.DropTable(
+                name: "ItemPriceSnapshots");
+
+            migrationBuilder.DropTable(
+                name: "SteamMarketCredentials");
 
             migrationBuilder.DropTable(
                 name: "Users");

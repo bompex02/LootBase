@@ -74,6 +74,8 @@ const refreshInventory = async () => {
       credentials: 'include'
     })
     await refresh()
+  } catch (err) {
+    notifyApiError(err)
   } finally {
     refreshing.value = false
   }

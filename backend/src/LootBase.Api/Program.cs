@@ -3,6 +3,7 @@ using LootBase.Application;
 using LootBase.Infrastructure;
 using LootBase.Infrastructure.Persistence;
 using Microsoft.AspNetCore.Authentication.Cookies;
+using Microsoft.AspNetCore.Diagnostics;
 using Microsoft.AspNetCore.HttpOverrides;
 using Microsoft.EntityFrameworkCore;
 
@@ -85,6 +86,8 @@ using (var scope = app.Services.CreateScope())
     }
 }
 
+// Render (and most PaaS hosts) terminate TLS at the proxy and forward plain
+// HTTP internally - without this, the app thinks every request is HTTP
 var forwardedHeadersOptions = new ForwardedHeadersOptions
 {
     ForwardedHeaders = ForwardedHeaders.XForwardedFor | ForwardedHeaders.XForwardedProto
@@ -93,12 +96,32 @@ forwardedHeadersOptions.KnownIPNetworks.Clear();
 forwardedHeadersOptions.KnownProxies.Clear();
 app.UseForwardedHeaders(forwardedHeadersOptions);
 
+app.UseExceptionHandler(errorApp =>
+{
+    errorApp.Run(async context =>
+    {
+        var exception = context.Features.Get<IExceptionHandlerFeature>()?.Error;
+        context.RequestServices.GetRequiredService<ILoggerFactory>()
+            .CreateLogger("GlobalExceptionHandler")
+            .LogError(exception, "Unhandled exception while processing {Path}", context.Request.Path);
+
+        context.Response.ContentType = "application/json";
+        context.Response.StatusCode = StatusCodes.Status500InternalServerError;
+        await context.Response.WriteAsJsonAsync(new
+        {
+            code = "internal_error",
+            error = "An unexpected error occurred. Please try again later."
+        });
+    });
+});
+
 app.UseCors("frontend");
 app.UseAuthentication();
 app.UseAuthorization();
 
 app.MapHealthEndpoints();
 app.MapAuthEndpoints();
+app.MapItemsEndpoints();
 app.MapPricingEndpoints();
 app.MapLeaderboardEndpoints();
 app.MapPlayerEndpoints();

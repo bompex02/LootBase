@@ -4,7 +4,7 @@ export default defineNuxtConfig({
   modules: ['@nuxt/ui'],
   css: ['~/assets/css/main.css'],
   runtimeConfig: {
-    // Server-only: the real backend address, used by server/routes/api/[...].ts to proxy all API calls
+    // Server-only: the real backend address, used by server/api/[...proxy].ts to proxy all API calls
     apiBase: process.env.NUXT_API_BASE ?? 'http://localhost:5188'
   },
   ui: {

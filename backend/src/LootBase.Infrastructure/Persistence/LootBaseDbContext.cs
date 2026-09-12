@@ -1,5 +1,7 @@
 using LootBase.Domain.Inventory;
+using LootBase.Domain.Pricing;
 using LootBase.Domain.Users;
+using LootBase.Infrastructure.Auth.Steam;
 using Microsoft.EntityFrameworkCore;
 
 namespace LootBase.Infrastructure.Persistence;
@@ -11,6 +13,10 @@ public sealed class LootBaseDbContext(DbContextOptions<LootBaseDbContext> option
     public DbSet<InventoryItem> InventoryItems => Set<InventoryItem>();
 
     public DbSet<InventorySnapshot> InventorySnapshots => Set<InventorySnapshot>();
+
+    public DbSet<ItemPriceSnapshot> ItemPriceSnapshots => Set<ItemPriceSnapshot>();
+
+    public DbSet<SteamMarketCredential> SteamMarketCredentials => Set<SteamMarketCredential>();
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
@@ -57,6 +63,23 @@ public sealed class LootBaseDbContext(DbContextOptions<LootBaseDbContext> option
             snapshot.HasIndex(x => new { x.UserId, x.AppId, x.CapturedAt });
             snapshot.Property(x => x.Currency).HasMaxLength(3);
             snapshot.Property(x => x.TotalValue).HasPrecision(18, 2);
+        });
+
+        modelBuilder.Entity<ItemPriceSnapshot>(snapshot =>
+        {
+            snapshot.HasKey(x => x.Id);
+            snapshot.HasIndex(x => new { x.MarketHashName, x.Currency, x.CapturedDate }).IsUnique();
+            snapshot.Property(x => x.MarketHashName).HasMaxLength(240);
+            snapshot.Property(x => x.Currency).HasMaxLength(3);
+            snapshot.Property(x => x.Price).HasPrecision(18, 2);
+            snapshot.Property(x => x.Source).HasMaxLength(16);
+        });
+
+        modelBuilder.Entity<SteamMarketCredential>(credential =>
+        {
+            credential.HasKey(x => x.Id);
+            credential.Property(x => x.Id).ValueGeneratedNever();
+            credential.Property(x => x.RefreshToken).IsRequired();
         });
     }
 }

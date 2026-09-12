@@ -63,8 +63,6 @@
       </section>
 
       <section class="space-y-3">
-        <h2 class="text-lg font-semibold">Marktpreise</h2>
-
         <UAlert
           v-if="pricingError"
           color="warning"
@@ -75,19 +73,7 @@
         />
 
         <template v-else-if="pricing">
-          <div class="rounded-md border border-zinc-800 bg-[#101821] p-5">
-            <PriceStatsChart
-              v-if="priceStats.length"
-              :stats="priceStats"
-              :currency="pricing.currency"
-              :color="rarityColor"
-            />
-            <p v-else class="text-sm text-zinc-500">Keine Preisstatistik verfügbar.</p>
-          </div>
-
           <div class="grid gap-2 text-xs text-zinc-500 sm:grid-cols-2">
-            <p>Quelle: <span class="text-zinc-300">{{ pricing.source }}</span></p>
-            <p>Aktualisiert: <span class="text-zinc-300">{{ formatDateTime(pricing.updatedAt ?? pricing.retrievedAt) }}</span></p>
             <UButton
               v-if="pricing.itemPage"
               :to="pricing.itemPage"
@@ -115,12 +101,48 @@
           </div>
         </template>
       </section>
+
+      <section class="space-y-3">
+        <div class="flex flex-wrap items-center justify-between gap-3">
+          <h2 class="text-lg font-semibold">Preisverlauf</h2>
+          <div class="flex gap-1 rounded-md border border-zinc-800 bg-[#101821] p-1">
+            <button
+              v-for="option in durationOptions"
+              :key="option.key"
+              type="button"
+              class="cursor-pointer rounded px-2.5 py-1 text-xs font-medium transition-colors"
+              :class="selectedDuration === option.key ? 'bg-zinc-700 text-zinc-100' : 'text-zinc-500 hover:text-zinc-300'"
+              @click="selectedDuration = option.key"
+            >
+              {{ option.label }}
+            </button>
+          </div>
+        </div>
+
+        <UAlert
+          v-if="historyError"
+          color="warning"
+          variant="soft"
+          icon="i-lucide-circle-alert"
+          title="Kein Preisverlauf"
+          description="Für dieses Item liegen aktuell keine Verlaufsdaten vor."
+        />
+
+        <div v-else-if="history" class="rounded-md border border-zinc-800 bg-[#101821] p-5">
+          <PriceHistoryChart
+            :points="visibleHistoryPoints"
+            :currency="history.currency"
+            :color="rarityColor"
+          />
+        </div>
+      </section>
     </template>
   </div>
 </template>
 
 <script setup lang="ts">
-import type { InventoryItem, PricingItem } from '~/types/api'
+import type { InventoryItem, ItemMetadata, PricingHistory, PricingHistoryPeriodKey, PricingItem } from '~/types/api'
+import type { PriceHistoryChartPoint } from '~/components/PriceHistoryChart.vue'
 
 const route = useRoute()
 const marketHashName = computed(() => String(route.params.marketHashName))
@@ -129,10 +151,84 @@ const selectedItem = useState<InventoryItem | null>('selected-inventory-item')
 const ownedItem = computed(() =>
   selectedItem.value?.marketHashName === marketHashName.value ? selectedItem.value : null)
 
+const { data: metadata } = await useApiFetch<ItemMetadata>(
+  `/api/items/${encodeURIComponent(marketHashName.value)}`,
+  { toastOnError: false }
+)
+
 const { data: pricing, pending, error: pricingError } = await useApiFetch<PricingItem>(
   `/api/pricing/items/${encodeURIComponent(marketHashName.value)}`,
   { query: { currency: ownedItem.value?.currency ?? 'EUR' } }
 )
+
+const { data: history, error: historyError } = await useApiFetch<PricingHistory>(
+  `/api/pricing/history/${encodeURIComponent(marketHashName.value)}`,
+  { query: { currency: ownedItem.value?.currency ?? 'EUR' } }
+)
+
+// Chart x-axis order: further back in time (left) to most recent (right)
+const PERIODS_BY_DURATION: Record<PricingHistoryPeriodKey, PricingHistoryPeriodKey[]> = {
+  '24h': ['24h'],
+  '7d': ['7d', '24h'],
+  '30d': ['30d', '7d', '24h'],
+  '90d': ['90d', '30d', '7d', '24h']
+}
+
+const PERIOD_LABELS: Record<PricingHistoryPeriodKey, string> = {
+  '24h': '24 Std.',
+  '7d': '7 Tage',
+  '30d': '30 Tage',
+  '90d': '90 Tage'
+}
+
+const DAYS_BY_DURATION: Record<PricingHistoryPeriodKey, number> = {
+  '24h': 1,
+  '7d': 7,
+  '30d': 30,
+  '90d': 90
+}
+
+const durationOptions: Array<{ key: PricingHistoryPeriodKey, label: string }> = [
+  { key: '7d', label: '7 Tage' },
+  { key: '30d', label: '30 Tage' },
+  { key: '90d', label: '90 Tage' }
+]
+
+const selectedDuration = ref<PricingHistoryPeriodKey>('90d')
+
+const dailyPointFormatter = new Intl.DateTimeFormat('de-DE', { day: '2-digit', month: '2-digit' })
+
+interface ChartPointSource {
+  price?: number | null
+}
+
+const toChartPoint = (key: string, label: string, source: ChartPointSource, volume: number): PriceHistoryChartPoint => ({
+  key,
+  label,
+  price: source.price ?? null,
+  volume
+})
+
+// Filter the history points to only include those within the selected duration window
+const visibleHistoryPoints = computed<PriceHistoryChartPoint[]>(() => {
+  if (!history.value) {
+    return []
+  }
+
+  const days = DAYS_BY_DURATION[selectedDuration.value]
+  const cutoff = Date.now() - days * 24 * 60 * 60 * 1000
+  const dailyPointsInWindow = history.value.dailyPoints.filter(point => new Date(point.date).getTime() >= cutoff)
+
+  if (dailyPointsInWindow.length >= 2) {
+    return dailyPointsInWindow.map(point =>
+      toChartPoint(point.date, dailyPointFormatter.format(new Date(point.date)), point, point.quantity))
+  }
+
+  return PERIODS_BY_DURATION[selectedDuration.value]
+    .map(period => history.value!.periods.find(candidate => candidate.period === period))
+    .filter((period): period is NonNullable<typeof period> => period !== undefined)
+    .map(period => toChartPoint(period.period, PERIOD_LABELS[period.period], period, period.volume))
+})
 
 const displayItem = computed(() => {
   if (ownedItem.value) {
@@ -144,27 +240,13 @@ const displayItem = computed(() => {
   }
 
   return {
-    displayName: marketHashName.value,
-    iconUrl: null as string | null,
-    type: null as string | null,
-    exterior: null as string | null,
-    rarity: null as string | null
+    displayName: metadata.value?.displayName ?? marketHashName.value,
+    iconUrl: metadata.value?.iconUrl,
+    type: metadata.value?.type,
+    exterior: metadata.value?.exterior,
+    rarity: metadata.value?.rarity
   }
 })
 
 const rarityColor = computed(() => getRarityColor(displayItem.value?.rarity))
-
-const priceStats = computed(() => {
-  if (!pricing.value) {
-    return []
-  }
-
-  return [
-    { label: 'Min', value: pricing.value.minPrice },
-    { label: 'Median', value: pricing.value.medianPrice },
-    { label: 'Mittelwert', value: pricing.value.meanPrice },
-    { label: 'Empfohlen', value: pricing.value.suggestedPrice },
-    { label: 'Max', value: pricing.value.maxPrice }
-  ].filter((stat): stat is { label: string, value: number } => typeof stat.value === 'number')
-})
 </script>

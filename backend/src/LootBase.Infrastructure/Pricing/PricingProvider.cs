@@ -7,15 +7,20 @@ using Microsoft.Extensions.Logging;
 
 namespace LootBase.Infrastructure.Pricing;
 
+// Price and history both come from one bulk Skinport call (/v1/sales/history); current price = last_24_hours
 public sealed class PricingProvider(
     HttpClient httpClient,
     IDistributedCache distributedCache,
-    ILogger<PricingProvider> logger) : IPricingCatalog
+    ItemPriceSnapshotStore snapshotStore,
+    ILogger<PricingProvider> logger) : IPricingCatalog, IPricingHistoryProvider
 {
-    private static readonly TimeSpan CacheDuration = TimeSpan.FromMinutes(15); // 15min caching for pricing data
+    private static readonly TimeSpan CacheDuration = TimeSpan.FromHours(6);
     private static readonly JsonSerializerOptions JsonOptions = new(JsonSerializerDefaults.Web);
     private static readonly ConcurrentDictionary<string, CatalogSnapshot> MemoryCache = new(StringComparer.OrdinalIgnoreCase);
     private static readonly ConcurrentDictionary<string, SemaphoreSlim> Locks = new(StringComparer.OrdinalIgnoreCase);
+
+    private static readonly Lock BulkBackfillStatusLock = new();
+    private static BulkBackfillStatusDto bulkBackfillStatus = BulkBackfillStatusDto.Idle;
 
     public async Task<PriceQuote?> GetPriceAsync(
         string marketHashName,
@@ -28,11 +33,7 @@ public sealed class PricingProvider(
             return null;
         }
 
-        var amount = item.SuggestedPrice
-            ?? item.MedianPrice
-            ?? item.MeanPrice
-            ?? item.MinPrice
-            ?? item.MaxPrice;
+        var amount = item.Price;
 
         return amount is null
             ? null
@@ -41,7 +42,8 @@ public sealed class PricingProvider(
                 amount.Value,
                 item.Currency,
                 item.Source,
-                item.RetrievedAt);
+                item.RetrievedAt
+            );
     }
 
     public async Task<IReadOnlyList<PricingCatalogItemDto>> GetItemsAsync(
@@ -63,11 +65,9 @@ public sealed class PricingProvider(
         return marketHashNames
             .Where(name => !string.IsNullOrWhiteSpace(name))
             .Distinct(StringComparer.OrdinalIgnoreCase)
-            .Select(name => catalog.TryGetValue(name, out var item)
-                ? item
-                : null)
-            .Where(item => item is not null)
-            .Select(item => item!)
+            .Select(name => catalog.Items.TryGetValue(name, out var entry) ? entry : null)
+            .Where(entry => entry is not null)
+            .Select(entry => ToCatalogItemDto(entry!, currency, entry!.Last24Hours, catalog.FetchedAt))
             .ToList();
     }
 
@@ -82,57 +82,259 @@ public sealed class PricingProvider(
         }
 
         var catalog = await GetCatalogAsync(currency, cancellationToken);
-        if (catalog is null)
+        if (catalog is null || !catalog.Items.TryGetValue(marketHashName, out var entry))
         {
             return null;
         }
 
-        return catalog.TryGetValue(marketHashName, out var item) ? item : null;
+        var item = ToCatalogItemDto(entry, currency, entry.Last24Hours, catalog.FetchedAt);
+
+        await snapshotStore.RecordDailySnapshotAsync(
+            item.MarketHashName, item.Currency,
+            entry.Last24Hours?.Price, entry.Last24Hours?.Volume ?? 0,
+            cancellationToken);
+
+        return item;
     }
 
-    private async Task<IReadOnlyDictionary<string, PricingCatalogItemDto>?> GetCatalogAsync(
+    public async Task<PricingHistoryDto?> GetHistoryAsync(
+        string marketHashName,
         string currency,
         CancellationToken cancellationToken)
     {
-        var normalizedCurrency = NormalizeCurrency(currency);
-        var cacheKey = GetCacheKey(normalizedCurrency);
-
-        if (MemoryCache.TryGetValue(cacheKey, out var cachedSnapshot) &&
-            cachedSnapshot.ExpiresAt > DateTimeOffset.UtcNow)
+        if (string.IsNullOrWhiteSpace(marketHashName))
         {
-            return cachedSnapshot.Items;
+            return null;
+        }
+
+        var catalog = await GetCatalogAsync(currency, cancellationToken);
+        var entry = catalog is not null && catalog.Items.TryGetValue(marketHashName, out var found) ? found : null;
+        var periods = entry is null ? null : BuildHistoryPeriods(entry);
+
+        var today = periods?.FirstOrDefault(period => period.Period == "24h");
+        if (today is not null)
+        {
+            await snapshotStore.RecordDailySnapshotAsync(
+                marketHashName, currency,
+                today.Price, today.Volume,
+                cancellationToken);
+        }
+
+        await snapshotStore.EnsureBackfilledFromSteamAsync(marketHashName, currency, cancellationToken);
+
+        if (periods is not null)
+        {
+            await snapshotStore.SeedFromSkinportPeriodsAsync(marketHashName, currency, periods, cancellationToken);
+        }
+
+        var dailyPoints = await snapshotStore.GetDailySnapshotsAsync(marketHashName, currency, cancellationToken);
+
+        if (periods is null && dailyPoints.Count == 0)
+        {
+            return null;
+        }
+
+        return new PricingHistoryDto(marketHashName, currency, periods ?? [], dailyPoints);
+    }
+
+    public Task<int?> BackfillFromSteamAsync(string marketHashName, CancellationToken cancellationToken) =>
+        snapshotStore.BackfillFromSteamAsync(marketHashName, cancellationToken);
+
+    public async Task<int> SnapshotAllAsync(string currency, CancellationToken cancellationToken)
+    {
+        var catalog = await GetCatalogAsync(currency, cancellationToken);
+        if (catalog is null)
+        {
+            logger.LogWarning("Snapshot-all aborted: Skinport catalog unavailable.");
+            return 0;
+        }
+
+        var items = catalog.Items.Values
+            .Select(entry => new DailySnapshotItemDto(
+                entry.MarketHashName,
+                entry.Last24Hours?.Price,
+                entry.Last24Hours?.Volume ?? 0))
+            .ToList();
+
+        var written = await snapshotStore.RecordDailySnapshotsBatchAsync(currency, items, cancellationToken);
+        logger.LogInformation(
+            "Snapshot-all wrote {Written}/{Total} rows for {Currency} (rest already captured today).",
+            written, items.Count, currency);
+        return written;
+    }
+
+    public async Task BackfillAllFromSteamAsync(string currency, CancellationToken cancellationToken)
+    {
+        var catalog = await GetCatalogAsync(currency, cancellationToken);
+        if (catalog is null)
+        {
+            logger.LogWarning("Bulk Steam backfill aborted: Skinport catalog unavailable.");
+            SetBulkBackfillStatus(status => status with
+            {
+                IsRunning = false,
+                Currency = currency,
+                FinishedAt = DateTimeOffset.UtcNow,
+                LastError = "Skinport catalog unavailable."
+            });
+            return;
+        }
+
+        var names = catalog.Items.Keys.ToList();
+        logger.LogInformation("Bulk Steam backfill starting for {Count} items ({Currency}).", names.Count, currency);
+
+        SetBulkBackfillStatus(status => status with { Currency = currency, TotalItems = names.Count });
+
+        var processed = 0;
+        var imported = 0;
+        var alreadyCovered = 0;
+        try
+        {
+            foreach (var name in names)
+            {
+                cancellationToken.ThrowIfCancellationRequested();
+
+                var result = await snapshotStore.BulkBackfillItemAsync(name, currency, cancellationToken);
+                imported += result.Imported;
+                if (result.AlreadyCovered)
+                {
+                    alreadyCovered++;
+                }
+                processed++;
+
+                SetBulkBackfillStatus(status => status with
+                {
+                    Processed = processed,
+                    Imported = imported,
+                    AlreadyCovered = alreadyCovered
+                });
+
+                if (processed % 50 == 0 || processed == names.Count)
+                {
+                    logger.LogInformation(
+                        "Bulk Steam backfill progress: {Processed}/{Total} items checked ({AlreadyCovered} already covered), {Imported} rows imported so far.",
+                        processed, names.Count, alreadyCovered, imported);
+                }
+            }
+
+            logger.LogInformation(
+                "Bulk Steam backfill finished: {Processed} items checked ({AlreadyCovered} already covered), {Imported} rows imported.",
+                processed, alreadyCovered, imported);
+        }
+        catch (Exception ex)
+        {
+            logger.LogError(ex, "Bulk Steam backfill crashed after {Processed}/{Total} items.", processed, names.Count);
+            SetBulkBackfillStatus(status => status with { LastError = ex.Message });
+        }
+        finally
+        {
+            SetBulkBackfillStatus(status => status with { IsRunning = false, FinishedAt = DateTimeOffset.UtcNow });
+        }
+    }
+
+    public bool TryStartBulkBackfill()
+    {
+        lock (BulkBackfillStatusLock)
+        {
+            if (bulkBackfillStatus.IsRunning)
+            {
+                return false;
+            }
+
+            bulkBackfillStatus = new BulkBackfillStatusDto(
+                IsRunning: true,
+                Currency: null,
+                TotalItems: 0,
+                Processed: 0,
+                AlreadyCovered: 0,
+                Imported: 0,
+                StartedAt: DateTimeOffset.UtcNow,
+                FinishedAt: null,
+                LastError: null);
+            return true;
+        }
+    }
+
+    public BulkBackfillStatusDto GetBulkBackfillStatus()
+    {
+        lock (BulkBackfillStatusLock)
+        {
+            return bulkBackfillStatus;
+        }
+    }
+
+    private static void SetBulkBackfillStatus(Func<BulkBackfillStatusDto, BulkBackfillStatusDto> update)
+    {
+        lock (BulkBackfillStatusLock)
+        {
+            bulkBackfillStatus = update(bulkBackfillStatus);
+        }
+    }
+
+    private static PricingCatalogItemDto ToCatalogItemDto(
+        SkinportHistoryItemDto entry,
+        string currency,
+        SkinportPeriodStatsDto? window,
+        DateTimeOffset retrievedAt)
+    {
+        return new PricingCatalogItemDto(
+            entry.MarketHashName,
+            string.IsNullOrWhiteSpace(entry.Currency) ? currency : entry.Currency,
+            window?.Price,
+            entry.ItemPage,
+            entry.MarketPage,
+            "skinport",
+            retrievedAt);
+    }
+
+    private static IReadOnlyList<PricingHistoryPeriodDto> BuildHistoryPeriods(SkinportHistoryItemDto item)
+    {
+        var periods = new List<PricingHistoryPeriodDto>();
+
+        AddHistoryPeriod(periods, "24h", item.Last24Hours);
+        AddHistoryPeriod(periods, "7d", item.Last7Days);
+        AddHistoryPeriod(periods, "30d", item.Last30Days);
+        AddHistoryPeriod(periods, "90d", item.Last90Days);
+
+        return periods;
+    }
+
+    private static void AddHistoryPeriod(List<PricingHistoryPeriodDto> periods, string period, SkinportPeriodStatsDto? stats)
+    {
+        if (stats is null)
+        {
+            return;
+        }
+
+        periods.Add(new PricingHistoryPeriodDto(period, stats.Price, stats.Volume));
+    }
+
+    private async Task<CatalogSnapshot?> GetCatalogAsync(string currency, CancellationToken cancellationToken)
+    {
+        var cacheKey = GetCacheKey(currency);
+
+        if (MemoryCache.TryGetValue(cacheKey, out var cached) && cached.ExpiresAt > DateTimeOffset.UtcNow)
+        {
+            return cached;
         }
 
         var gate = Locks.GetOrAdd(cacheKey, _ => new SemaphoreSlim(1, 1));
         await gate.WaitAsync(cancellationToken);
         try
         {
-            if (MemoryCache.TryGetValue(cacheKey, out cachedSnapshot) &&
-                cachedSnapshot.ExpiresAt > DateTimeOffset.UtcNow)
+            if (MemoryCache.TryGetValue(cacheKey, out cached) && cached.ExpiresAt > DateTimeOffset.UtcNow)
             {
-                return cachedSnapshot.Items;
+                return cached;
             }
 
             var distributedSnapshot = await ReadDistributedCacheAsync(cacheKey, cancellationToken);
-            if (distributedSnapshot is not null &&
-                distributedSnapshot.ExpiresAt > DateTimeOffset.UtcNow)
+            if (distributedSnapshot is not null && distributedSnapshot.ExpiresAt > DateTimeOffset.UtcNow)
             {
                 MemoryCache[cacheKey] = distributedSnapshot;
-                return distributedSnapshot.Items;
+                return distributedSnapshot;
             }
 
-            var fetchedSnapshot = await FetchCatalogAsync(normalizedCurrency, cacheKey, cancellationToken);
-            if (fetchedSnapshot is not null)
-            {
-                return fetchedSnapshot.Items;
-            }
-
-            if (cachedSnapshot is not null)
-            {
-                return cachedSnapshot.Items;
-            }
-
-            return distributedSnapshot?.Items;
+            var fetched = await FetchCatalogAsync(currency, cacheKey, cancellationToken);
+            return fetched ?? cached ?? distributedSnapshot;
         }
         finally
         {
@@ -145,8 +347,7 @@ public sealed class PricingProvider(
         string cacheKey,
         CancellationToken cancellationToken)
     {
-        var requestUri =
-            $"https://api.skinport.com/v1/items?app_id=730&currency={Uri.EscapeDataString(currency)}&tradable=0";
+        var requestUri = $"https://api.skinport.com/v1/sales/history?app_id=730&currency={Uri.EscapeDataString(currency)}";
 
         using var request = new HttpRequestMessage(HttpMethod.Get, requestUri);
 
@@ -154,13 +355,13 @@ public sealed class PricingProvider(
         if (!response.IsSuccessStatusCode)
         {
             logger.LogWarning(
-                "Skinport pricing request failed with status code {StatusCode}.",
+                "Skinport sales history request failed with status code {StatusCode}.",
                 (int)response.StatusCode);
             return null;
         }
 
         await using var stream = await response.Content.ReadAsStreamAsync(cancellationToken);
-        var items = await JsonSerializer.DeserializeAsync<List<PricingItemDto>>(stream, JsonOptions, cancellationToken);
+        var items = await JsonSerializer.DeserializeAsync<List<SkinportHistoryItemDto>>(stream, JsonOptions, cancellationToken);
         if (items is null)
         {
             return null;
@@ -170,113 +371,70 @@ public sealed class PricingProvider(
         var snapshot = new CatalogSnapshot(
             items
                 .Where(item => !string.IsNullOrWhiteSpace(item.MarketHashName))
-                .Select(item => item.ToPricingItemDto(currency, fetchedAt))
                 .GroupBy(item => item.MarketHashName, StringComparer.OrdinalIgnoreCase)
                 .ToDictionary(
                     group => group.Key,
-                    group => group.OrderByDescending(item => item.Quantity).First(),
+                    group => group.OrderByDescending(item => item.Last90Days?.Volume ?? 0).First(),
                     StringComparer.OrdinalIgnoreCase),
+            fetchedAt,
             fetchedAt.Add(CacheDuration));
 
         MemoryCache[cacheKey] = snapshot;
 
         try
         {
-            var cachedJson = JsonSerializer.Serialize(ToCacheDto(snapshot), JsonOptions);
+            var cachedJson = JsonSerializer.Serialize(snapshot, JsonOptions);
             await distributedCache.SetStringAsync(
                 cacheKey,
                 cachedJson,
-                new DistributedCacheEntryOptions
-                {
-                    AbsoluteExpirationRelativeToNow = CacheDuration
-                },
+                new DistributedCacheEntryOptions { AbsoluteExpirationRelativeToNow = CacheDuration },
                 cancellationToken);
         }
         catch (Exception ex)
         {
-            logger.LogWarning(ex, "Writing Skinport pricing catalog to distributed cache failed.");
+            logger.LogWarning(ex, "Writing Skinport pricing/history cache failed.");
         }
 
         return snapshot;
     }
 
-    private async Task<CatalogSnapshot?> ReadDistributedCacheAsync(
-        string cacheKey,
-        CancellationToken cancellationToken)
+    private async Task<CatalogSnapshot?> ReadDistributedCacheAsync(string cacheKey, CancellationToken cancellationToken)
     {
         try
         {
             var cachedJson = await distributedCache.GetStringAsync(cacheKey, cancellationToken);
-            if (string.IsNullOrWhiteSpace(cachedJson))
-            {
-                return null;
-            }
-
-            var cached = JsonSerializer.Deserialize<CatalogCacheDto>(cachedJson, JsonOptions);
-            if (cached is null)
-            {
-                return null;
-            }
-
-            var items = cached.Items
-                .Where(item => !string.IsNullOrWhiteSpace(item.MarketHashName))
-                .Select(item => item.ToPricingItemDto(item.Currency, cached.FetchedAt))
-                .GroupBy(item => item.MarketHashName, StringComparer.OrdinalIgnoreCase)
-                .ToDictionary(
-                    group => group.Key,
-                    group => group.OrderByDescending(item => item.Quantity).First(),
-                    StringComparer.OrdinalIgnoreCase);
-
-            return new CatalogSnapshot(items, cached.FetchedAt.Add(CacheDuration));
+            return string.IsNullOrWhiteSpace(cachedJson)
+                ? null
+                : JsonSerializer.Deserialize<CatalogSnapshot>(cachedJson, JsonOptions);
         }
         catch (Exception ex)
         {
-            logger.LogWarning(ex, "Reading Skinport pricing catalog from distributed cache failed.");
+            logger.LogWarning(ex, "Reading Skinport pricing/history cache failed.");
             return null;
         }
     }
 
     private static string GetCacheKey(string currency)
     {
-        return $"pricing:skinport:730:{currency}:v1";
+        return $"pricing:skinport:history:730:{currency}:v1";
     }
 
-    private static string NormalizeCurrency(string currency)
-    {
-        return string.IsNullOrWhiteSpace(currency) ? "EUR" : currency.Trim().ToUpperInvariant();
-    }
 
     private sealed record CatalogSnapshot(
-        IReadOnlyDictionary<string, PricingCatalogItemDto> Items,
+        IReadOnlyDictionary<string, SkinportHistoryItemDto> Items,
+        DateTimeOffset FetchedAt,
         DateTimeOffset ExpiresAt);
 
-    private sealed record CatalogCacheDto(
-        DateTimeOffset FetchedAt,
-        List<PricingItemDto> Items);
-
-    private static CatalogCacheDto ToCacheDto(CatalogSnapshot snapshot)
+    private sealed record SkinportPeriodStatsDto
     {
-        return new CatalogCacheDto(
-            snapshot.ExpiresAt - CacheDuration,
-            snapshot.Items.Values
-                .Select(item => new PricingItemDto
-                {
-                    MarketHashName = item.MarketHashName,
-                    Currency = item.Currency,
-                    SuggestedPrice = item.SuggestedPrice,
-                    ItemPage = item.ItemPage,
-                    MarketPage = item.MarketPage,
-                    MinPrice = item.MinPrice,
-                    MaxPrice = item.MaxPrice,
-                    MeanPrice = item.MeanPrice,
-                    MedianPrice = item.MedianPrice,
-                    Quantity = item.Quantity,
-                    UpdatedAt = item.UpdatedAt is null ? null : item.UpdatedAt.Value.ToUnixTimeSeconds()
-                })
-                .ToList());
+        [JsonPropertyName("avg")]
+        public decimal? Price { get; init; }
+
+        [JsonPropertyName("volume")]
+        public int Volume { get; init; }
     }
 
-    private sealed record PricingItemDto
+    private sealed record SkinportHistoryItemDto
     {
         [JsonPropertyName("market_hash_name")]
         public string MarketHashName { get; init; } = string.Empty;
@@ -284,49 +442,22 @@ public sealed class PricingProvider(
         [JsonPropertyName("currency")]
         public string Currency { get; init; } = string.Empty;
 
-        [JsonPropertyName("suggested_price")]
-        public decimal? SuggestedPrice { get; init; }
-
         [JsonPropertyName("item_page")]
         public string? ItemPage { get; init; }
 
         [JsonPropertyName("market_page")]
         public string? MarketPage { get; init; }
 
-        [JsonPropertyName("min_price")]
-        public decimal? MinPrice { get; init; }
+        [JsonPropertyName("last_24_hours")]
+        public SkinportPeriodStatsDto? Last24Hours { get; init; }
 
-        [JsonPropertyName("max_price")]
-        public decimal? MaxPrice { get; init; }
+        [JsonPropertyName("last_7_days")]
+        public SkinportPeriodStatsDto? Last7Days { get; init; }
 
-        [JsonPropertyName("mean_price")]
-        public decimal? MeanPrice { get; init; }
+        [JsonPropertyName("last_30_days")]
+        public SkinportPeriodStatsDto? Last30Days { get; init; }
 
-        [JsonPropertyName("median_price")]
-        public decimal? MedianPrice { get; init; }
-
-        [JsonPropertyName("quantity")]
-        public int Quantity { get; init; }
-
-        [JsonPropertyName("updated_at")]
-        public long? UpdatedAt { get; init; }
-
-        public PricingCatalogItemDto ToPricingItemDto(string currency, DateTimeOffset fetchedAt)
-        {
-            return new PricingCatalogItemDto(
-                MarketHashName,
-                string.IsNullOrWhiteSpace(Currency) ? currency : Currency,
-                SuggestedPrice,
-                MeanPrice,
-                MedianPrice,
-                MinPrice,
-                MaxPrice,
-                Quantity,
-                ItemPage,
-                MarketPage,
-                "skinport",
-                fetchedAt,
-                UpdatedAt is null ? null : DateTimeOffset.FromUnixTimeSeconds(UpdatedAt.Value));
-        }
+        [JsonPropertyName("last_90_days")]
+        public SkinportPeriodStatsDto? Last90Days { get; init; }
     }
 }

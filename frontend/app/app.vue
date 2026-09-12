@@ -47,9 +47,13 @@ const { data: profileResponse } = currentSteamId.value
 const profile = computed(() => isPlayerProfile(profileResponse.value) ? profileResponse.value : null)
 
 const logout = async () => {
-  await $fetch('/api/auth/logout', { method: 'POST', credentials: 'include' })
-  currentSteamId.value = null
-  await navigateTo('/', { external: true })
+  try {
+    await $fetch('/api/auth/logout', { method: 'POST', credentials: 'include' })
+    currentSteamId.value = null
+    await navigateTo('/', { external: true })
+  } catch (err) {
+    notifyApiError(err)
+  }
 }
 
 const accountMenuItems = computed(() => [[
