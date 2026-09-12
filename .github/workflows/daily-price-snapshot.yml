@@ -1,0 +1,17 @@
+name: Daily price snapshot
+
+on:
+  schedule:
+    - cron: "0 3 * * *"
+  workflow_dispatch: {}
+
+jobs:
+  snapshot:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Trigger snapshot-all
+        run: |
+          curl --fail --show-error --silent --max-time 120 --retry 3 --retry-delay 15 \
+            -X POST \
+            -H "X-Backfill-Key: ${{ secrets.PRICING_OPS_SECRET }}" \
+            "https://lootbase-backend.onrender.com/api/pricing/snapshot-all?currency=EUR"
