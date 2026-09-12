@@ -163,6 +163,39 @@ public sealed class PricingProvider(
         return written;
     }
 
+    public async Task<BackfillBatchResultDto> BackfillNextBatchFromSteamAsync(
+        string currency,
+        int batchSize,
+        CancellationToken cancellationToken)
+    {
+        var catalog = await GetCatalogAsync(currency, cancellationToken);
+        if (catalog is null)
+        {
+            logger.LogWarning("Backfill-batch aborted: Skinport catalog unavailable.");
+            return new BackfillBatchResultDto(Processed: 0, Imported: 0, Remaining: 0);
+        }
+
+        var allNames = catalog.Items.Keys.ToList();
+        var batch = await snapshotStore.GetNextUncoveredItemsAsync(currency, allNames, batchSize, cancellationToken);
+
+        var imported = 0;
+        foreach (var name in batch)
+        {
+            var result = await snapshotStore.BulkBackfillItemAsync(name, currency, cancellationToken);
+            imported += result.Imported;
+        }
+
+        var remaining = batch.Count < batchSize
+            ? 0
+            : (await snapshotStore.GetNextUncoveredItemsAsync(currency, allNames, allNames.Count, cancellationToken)).Count;
+
+        logger.LogInformation(
+            "Backfill-batch processed {Processed} items, imported {Imported} rows, {Remaining} items left for {Currency}.",
+            batch.Count, imported, remaining, currency);
+
+        return new BackfillBatchResultDto(Processed: batch.Count, Imported: imported, Remaining: remaining);
+    }
+
     public async Task BackfillAllFromSteamAsync(string currency, CancellationToken cancellationToken)
     {
         var catalog = await GetCatalogAsync(currency, cancellationToken);
