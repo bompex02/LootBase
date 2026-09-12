@@ -11,7 +11,7 @@ jobs:
     steps:
       - name: Trigger backfill-batch
         run: |
-          curl --fail --show-error --silent --max-time 280 --retry 2 --retry-delay 15 \
+          curl --fail --show-error --silent --max-time 285 --retry 2 --retry-delay 15 \
             -X POST \
             -H "X-Backfill-Key: ${{ secrets.Steam__MarketBackfillSecret }}" \
-            "https://lootbase-backend.onrender.com/api/pricing/backfill-batch?currency=EUR&batchSize=30"
+            "https://lootbase-backend.onrender.com/api/pricing/backfill-batch?currency=EUR&batchSize=55"
