@@ -24,7 +24,16 @@ services:
         sync: false
       - key: Steam__WebApiKey
         sync: false
+      - key: Steam__MarketRefreshToken
+        sync: false
+      - key: Steam__MarketBackfillSecret
+        sync: false
       - key: Cors__AllowedOrigins__0
+        sync: false
+      # Without this, DataProtection keys fall back to the container's local
+      # disk - lost on every restart, silently breaking anything encrypted
+      # with them (e.g. the stored Steam refresh token)
+      - key: ConnectionStrings__Redis
         sync: false
 
   - type: web
