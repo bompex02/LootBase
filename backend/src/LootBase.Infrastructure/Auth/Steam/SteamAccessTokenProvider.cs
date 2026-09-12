@@ -1,5 +1,7 @@
+using System.Security.Cryptography;
 using System.Text.Json;
 using LootBase.Infrastructure.Persistence;
+using Microsoft.AspNetCore.DataProtection;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
@@ -8,12 +10,14 @@ namespace LootBase.Infrastructure.Auth.Steam;
 
 // Mints steamLoginSecure cookies from a long-lived Steam refresh token, and
 // asks Steam to rotate that refresh token on every call, persisting whatever
-// comes back to the DB. So nobody has to hand-copy a Steam cookie again -
-// unless the session gets revoked entirely (password change, etc)
+// comes back to the DB (encrypted at rest via Data Protection). So nobody has
+// to hand-copy a Steam cookie again - unless the session gets revoked
+// entirely (password change, etc)
 public sealed class SteamAccessTokenProvider(
     HttpClient httpClient,
     LootBaseDbContext dbContext,
     IOptions<SteamOptions> options,
+    IDataProtectionProvider dataProtectionProvider,
     ILogger<SteamAccessTokenProvider> logger)
 {
     private static readonly TimeSpan RefreshMargin = TimeSpan.FromMinutes(10);
@@ -22,6 +26,7 @@ public sealed class SteamAccessTokenProvider(
     private static DateTimeOffset cachedExpiresAt = DateTimeOffset.MinValue;
 
     private readonly SteamOptions options = options.Value;
+    private readonly IDataProtector refreshTokenProtector = dataProtectionProvider.CreateProtector("SteamMarketRefreshToken");
 
     public async Task<string?> GetMarketCookieAsync(CancellationToken cancellationToken)
     {
@@ -59,7 +64,20 @@ public sealed class SteamAccessTokenProvider(
             .Select(credential => credential.RefreshToken)
             .FirstOrDefaultAsync(cancellationToken);
 
-        return string.IsNullOrWhiteSpace(stored) ? options.MarketRefreshToken : stored;
+        if (string.IsNullOrWhiteSpace(stored))
+        {
+            return options.MarketRefreshToken;
+        }
+
+        try
+        {
+            return refreshTokenProtector.Unprotect(stored);
+        }
+        catch (CryptographicException ex)
+        {
+            logger.LogWarning(ex, "Stored Steam refresh token could not be decrypted; a fresh login via the steam-refresh-token script is needed.");
+            return null;
+        }
     }
 
     private async Task<string?> RefreshAsync(string refreshToken, CancellationToken cancellationToken)
@@ -126,6 +144,8 @@ public sealed class SteamAccessTokenProvider(
 
     private async Task StoreRefreshTokenAsync(string refreshToken, CancellationToken cancellationToken)
     {
+        var encryptedRefreshToken = refreshTokenProtector.Protect(refreshToken);
+
         var existing = await dbContext.SteamMarketCredentials
             .FirstOrDefaultAsync(credential => credential.Id == SteamMarketCredential.SingletonId, cancellationToken);
 
@@ -133,13 +153,13 @@ public sealed class SteamAccessTokenProvider(
         {
             dbContext.SteamMarketCredentials.Add(new SteamMarketCredential
             {
-                RefreshToken = refreshToken,
+                RefreshToken = encryptedRefreshToken,
                 UpdatedAt = DateTimeOffset.UtcNow
             });
         }
         else
         {
-            existing.RefreshToken = refreshToken;
+            existing.RefreshToken = encryptedRefreshToken;
             existing.UpdatedAt = DateTimeOffset.UtcNow;
         }
 

@@ -1,3 +1,5 @@
+using System.Security.Cryptography;
+using System.Text;
 using LootBase.Application.Abstractions.Pricing;
 using LootBase.Infrastructure.Auth.Steam;
 using Microsoft.Extensions.Options;
@@ -167,8 +169,11 @@ public static class PricingEndpoints
     private static bool IsAuthorizedForPricingOps(HttpRequest request, SteamOptions steamOptions)
     {
         var expectedSecret = steamOptions.MarketBackfillSecret;
+        var providedSecret = request.Headers["X-Backfill-Key"].ToString();
         return !string.IsNullOrWhiteSpace(expectedSecret) &&
-            request.Headers["X-Backfill-Key"] == expectedSecret;
+            CryptographicOperations.FixedTimeEquals(
+                Encoding.UTF8.GetBytes(providedSecret),
+                Encoding.UTF8.GetBytes(expectedSecret));
     }
 
     private static IReadOnlyCollection<string> ParseMarketHashNames(IEnumerable<string>? marketHashNames)
