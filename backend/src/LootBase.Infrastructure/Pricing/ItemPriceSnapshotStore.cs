@@ -14,6 +14,7 @@ public sealed class ItemPriceSnapshotStore(
 {
     private const int BackfillTargetDays = 90;
     private const int SufficientCoverageDays = 85;
+    private const string NoSteamDataSource = "steam_no_data";
 
     private static readonly ConcurrentDictionary<string, DateOnly> LastSnapshotDateByItem = new(StringComparer.OrdinalIgnoreCase);
 
@@ -286,13 +287,69 @@ public sealed class ItemPriceSnapshotStore(
         }
     }
 
-    // Only a "steam" row counts as real coverage - a single Skinport seed
-    // anchor would otherwise look "covered" forever and block the real backfill
+    // One query for the whole catalog instead of one per item - lets a batch
+    // endpoint pick its next N items without an N+1 coverage check
+    public async Task<IReadOnlyList<string>> GetNextUncoveredItemsAsync(
+        string currency,
+        IReadOnlyList<string> candidateMarketHashNames,
+        int count,
+        CancellationToken cancellationToken)
+    {
+        var cutoff = DateOnly.FromDateTime(DateTime.UtcNow).AddDays(-SufficientCoverageDays);
+
+        var coveredNames = await dbContext.ItemPriceSnapshots
+            .Where(snapshot =>
+                (snapshot.Currency == currency && snapshot.Source == "steam" && snapshot.CapturedDate <= cutoff) ||
+                snapshot.Source == NoSteamDataSource)
+            .Select(snapshot => snapshot.MarketHashName)
+            .ToHashSetAsync(StringComparer.OrdinalIgnoreCase, cancellationToken);
+
+        return candidateMarketHashNames
+            .Where(name => !coveredNames.Contains(name))
+            .Take(count)
+            .ToList();
+    }
+
+    // Marks an item Steam confirmed has no sale history - currency-agnostic
+    // (that fact doesn't depend on currency), so batch/reactive backfill
+    // stop retrying it instead of hitting Steam for it forever
+    private async Task MarkNoSteamDataAsync(string marketHashName, CancellationToken cancellationToken)
+    {
+        var alreadyMarked = await dbContext.ItemPriceSnapshots.AnyAsync(
+            snapshot => snapshot.MarketHashName == marketHashName && snapshot.Source == NoSteamDataSource,
+            cancellationToken);
+        if (alreadyMarked)
+        {
+            return;
+        }
+
+        dbContext.ItemPriceSnapshots.Add(new ItemPriceSnapshot
+        {
+            MarketHashName = marketHashName,
+            Currency = "N/A",
+            CapturedDate = DateOnly.FromDateTime(DateTime.UtcNow),
+            Quantity = 0,
+            Source = NoSteamDataSource
+        });
+        await dbContext.SaveChangesAsync(cancellationToken);
+    }
+
+    // A "steam" row counts as real coverage, and so does a confirmed
+    // no-data marker - a single Skinport seed anchor would otherwise look
+    // "covered" forever and block the real backfill
     private async Task<bool> HasSufficientCoverageAsync(
         string marketHashName,
         string currency,
         CancellationToken cancellationToken)
     {
+        var hasNoDataMarker = await dbContext.ItemPriceSnapshots.AnyAsync(
+            snapshot => snapshot.MarketHashName == marketHashName && snapshot.Source == NoSteamDataSource,
+            cancellationToken);
+        if (hasNoDataMarker)
+        {
+            return true;
+        }
+
         var today = DateOnly.FromDateTime(DateTime.UtcNow);
         var oldestSteamCapturedDate = await dbContext.ItemPriceSnapshots
             .Where(snapshot => snapshot.MarketHashName == marketHashName &&
@@ -328,12 +385,16 @@ public sealed class ItemPriceSnapshotStore(
 
         if (result.Outcome == SteamMarketHistoryOutcome.NoData || result.Data is null)
         {
+            // Common for stickers/agents/graffiti - mark it so batch backfill
+            // stops retrying an item Steam will never have history for
+            await MarkNoSteamDataAsync(marketHashName, cancellationToken);
             return 0;
         }
 
         var data = result.Data;
         if (data.Points.Count == 0)
         {
+            await MarkNoSteamDataAsync(marketHashName, cancellationToken);
             return 0;
         }
 

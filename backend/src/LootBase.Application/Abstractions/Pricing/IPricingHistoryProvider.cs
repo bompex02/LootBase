@@ -29,4 +29,16 @@ public interface IPricingHistoryProvider
     // Claims the "running" slot so two bulk runs can't overlap. Call before
     // BackfillAllFromSteamAsync; false means one's already in progress
     bool TryStartBulkBackfill();
+
+    // Backfills up to batchSize not-yet-covered items from Steam, then
+    // returns - unlike BackfillAllFromSteamAsync this finishes within one
+    // request, meant to be hit repeatedly by an external scheduler (e.g.
+    // every few minutes) until Remaining reaches 0. Safe to call anytime;
+    // a no-op batch (nothing left to cover) returns almost instantly.
+    Task<BackfillBatchResultDto> BackfillNextBatchFromSteamAsync(
+        string currency,
+        int batchSize,
+        CancellationToken cancellationToken);
 }
+
+public sealed record BackfillBatchResultDto(int Processed, int Imported, int Remaining);

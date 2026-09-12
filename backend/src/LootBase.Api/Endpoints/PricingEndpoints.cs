@@ -146,6 +146,29 @@ public static class PricingEndpoints
         })
         .WithTags("Pricing");
 
+        // Meant for a scheduler that pings every few minutes (e.g. a GitHub
+        // Actions cron) rather than one long-lived background task - each
+        // call finishes within the request, so it survives a host that
+        // sleeps between requests (unlike backfill-all's Task.Run).
+        app.MapPost("/api/pricing/backfill-batch", async (
+            HttpRequest request,
+            string? currency,
+            int? batchSize,
+            IOptions<SteamOptions> steamOptions,
+            IPricingHistoryProvider pricingHistory,
+            CancellationToken cancellationToken) =>
+        {
+            if (!IsAuthorizedForPricingOps(request, steamOptions.Value))
+            {
+                return Results.Unauthorized();
+            }
+
+            var result = await pricingHistory.BackfillNextBatchFromSteamAsync(
+                currency ?? "EUR", batchSize ?? 20, cancellationToken);
+            return Results.Ok(result);
+        })
+        .WithTags("Pricing");
+
         app.MapGet("/api/pricing/backfill-all/status", (
             HttpRequest request,
             IOptions<SteamOptions> steamOptions,
