@@ -55,4 +55,4 @@ jobs:
         if: steps.loop.outputs.remaining != '0'
         env:
           GH_TOKEN: ${{ github.token }}
-        run: gh workflow run "Steam price history backfill (batched)"
+        run: gh workflow run "Steam price history backfill (batched)" --repo "${{ github.repository }}"
