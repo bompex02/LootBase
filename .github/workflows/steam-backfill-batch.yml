@@ -5,18 +5,30 @@ on:
     - cron: "*/5 * * * *"
   workflow_dispatch: {}
 
+# GitHub only ever runs one instance of this at a time - if a scheduled
+# trigger lands while a run from an earlier trigger is still going (each run
+# can last hours now), skip it instead of doubling up on the same Steam
+# throttle for no extra throughput.
+concurrency:
+  group: steam-backfill-batch
+  cancel-in-progress: false
+
 jobs:
   backfill:
     runs-on: ubuntu-latest
+    timeout-minutes: 345
     steps:
       # GitHub throttles a */5 schedule hard on low-traffic repos - real-world
-      # triggers land more like every 1-5h, not every 5 minutes. So each
-      # trigger that does land has to do a lot more work: loop the batch call
-      # instead of relying on trigger frequency we don't control.
+      # triggers land more like every 1-5h, not every 5 minutes. Rather than
+      # fight that, make each trigger that does land count: keep looping for
+      # up to ~5.5h (comfortably under the 6h job ceiling) instead of a fixed
+      # handful of rounds, so the rare long windows we do get are used fully.
       - name: Trigger backfill-batch repeatedly
         run: |
-          for i in $(seq 1 12); do
-            echo "Round $i"
+          deadline=$(( $(date +%s) + 5*3600 + 30*60 ))
+          round=1
+          while [ "$(date +%s)" -lt "$deadline" ]; do
+            echo "Round $round"
             response=$(curl --fail --show-error --silent --max-time 285 --retry 2 --retry-delay 15 \
               -X POST \
               -H "X-Backfill-Key: ${{ secrets.Steam__MarketBackfillSecret }}" \
@@ -27,4 +39,5 @@ jobs:
               echo "Nothing left to backfill."
               break
             fi
+            round=$((round + 1))
           done
