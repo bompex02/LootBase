@@ -13,7 +13,6 @@ public sealed class ItemPriceSnapshotStore(
     ILogger<ItemPriceSnapshotStore> logger)
 {
     private const int BackfillTargetDays = 90;
-    private const int SufficientCoverageDays = 85;
     private const string NoSteamDataSource = "steam_no_data";
 
     private static readonly ConcurrentDictionary<string, DateOnly> LastSnapshotDateByItem = new(StringComparer.OrdinalIgnoreCase);
@@ -295,11 +294,13 @@ public sealed class ItemPriceSnapshotStore(
         int count,
         CancellationToken cancellationToken)
     {
-        var cutoff = DateOnly.FromDateTime(DateTime.UtcNow).AddDays(-SufficientCoverageDays);
-
+        // Steam returns an item's full available history in one response (no
+        // pagination), so one successful fetch is complete - requiring 85+
+        // days of depth here would leave newer items (with genuinely less
+        // history than that) looking "uncovered" forever and stuck retrying
         var coveredNames = await dbContext.ItemPriceSnapshots
             .Where(snapshot =>
-                (snapshot.Currency == currency && snapshot.Source == "steam" && snapshot.CapturedDate <= cutoff) ||
+                (snapshot.Currency == currency && snapshot.Source == "steam") ||
                 snapshot.Source == NoSteamDataSource)
             .Select(snapshot => snapshot.MarketHashName)
             .ToHashSetAsync(StringComparer.OrdinalIgnoreCase, cancellationToken);
@@ -350,16 +351,13 @@ public sealed class ItemPriceSnapshotStore(
             return true;
         }
 
-        var today = DateOnly.FromDateTime(DateTime.UtcNow);
-        var oldestSteamCapturedDate = await dbContext.ItemPriceSnapshots
-            .Where(snapshot => snapshot.MarketHashName == marketHashName &&
+        // Same reasoning as GetNextUncoveredItemsAsync: one successful fetch
+        // is complete, Steam doesn't hand back more on a second call
+        return await dbContext.ItemPriceSnapshots.AnyAsync(
+            snapshot => snapshot.MarketHashName == marketHashName &&
                 snapshot.Currency == currency &&
-                snapshot.Source == "steam")
-            .OrderBy(snapshot => snapshot.CapturedDate)
-            .Select(snapshot => (DateOnly?)snapshot.CapturedDate)
-            .FirstOrDefaultAsync(cancellationToken);
-
-        return oldestSteamCapturedDate is not null && oldestSteamCapturedDate.Value <= today.AddDays(-SufficientCoverageDays);
+                snapshot.Source == "steam",
+            cancellationToken);
     }
 
     private static async Task WaitForSteamThrottleAsync(CancellationToken cancellationToken)
