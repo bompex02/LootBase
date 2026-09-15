@@ -33,26 +33,37 @@ jobs:
           remaining=1
           while [ "$(date +%s)" -lt "$deadline" ]; do
             echo "Round $round"
-            response=$(curl --fail --show-error --silent --max-time 285 --retry 2 --retry-delay 15 \
+            # A backend redeploy/restart mid-call fails this one request -
+            # don't let that (via bash's default -e) kill the whole job and
+            # skip the self-chain step below. Wait it out and keep going.
+            if ! response=$(curl --fail --show-error --silent --max-time 285 --retry 2 --retry-delay 15 \
               -X POST \
               -H "X-Backfill-Key: ${{ secrets.Steam__MarketBackfillSecret }}" \
-              "https://lootbase-backend.onrender.com/api/pricing/backfill-batch?currency=EUR&batchSize=55")
+              "https://lootbase-backend.onrender.com/api/pricing/backfill-batch?currency=EUR&batchSize=55"); then
+              echo "Request failed (backend restarting?) - waiting 30s and retrying"
+              sleep 30
+              round=$((round + 1))
+              continue
+            fi
             echo "$response"
-            remaining=$(echo "$response" | jq -r '.remaining')
+            remaining=$(echo "$response" | jq -r '.remaining // empty')
             if [ "$remaining" = "0" ]; then
               echo "Nothing left to backfill."
               break
             fi
             round=$((round + 1))
           done
-          echo "remaining=$remaining" >> "$GITHUB_OUTPUT"
+          echo "remaining=${remaining:-1}" >> "$GITHUB_OUTPUT"
 
       # Don't wait for GitHub's unreliable */5 schedule to fire again -
       # immediately queue the next run so windows chain back-to-back with
       # near-zero gap instead of the multi-hour gaps the schedule alone gives
-      # us. Only self-chains while there's still work left.
+      # us. Runs even if the loop step above had trouble (always()) - an
+      # unknown/failed state defaults to "assume not done" and queues anyway,
+      # which is harmless (a redundant run just no-ops quickly if we were
+      # actually finished).
       - name: Queue next run if not done
-        if: steps.loop.outputs.remaining != '0'
+        if: always() && steps.loop.outputs.remaining != '0'
         env:
           GH_TOKEN: ${{ github.token }}
         run: gh workflow run "Steam price history backfill (batched)" --repo "${{ github.repository }}"

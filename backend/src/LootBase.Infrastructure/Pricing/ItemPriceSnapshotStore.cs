@@ -406,6 +406,10 @@ public sealed class ItemPriceSnapshotStore(
         var relevantPoints = data.Points.Where(point => point.Date >= cutoff).ToList();
         if (relevantPoints.Count == 0)
         {
+            // Steam has history, just none of it recent enough to matter -
+            // same deal as NoData: nothing will change on a retry, so mark
+            // it or GetNextUncoveredItemsAsync picks it again forever
+            await MarkNoSteamDataAsync(marketHashName, cancellationToken);
             return 0;
         }
 
