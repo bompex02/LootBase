@@ -168,6 +168,11 @@ public sealed class ItemPriceSnapshotStore(
         return newSnapshots.Count;
     }
 
+    public Task<DateOnly?> GetLastDailySnapshotDateAsync(string currency, CancellationToken cancellationToken) =>
+        dbContext.ItemPriceSnapshots
+            .Where(snapshot => snapshot.Currency == currency && snapshot.Source == "skinport")
+            .MaxAsync(snapshot => (DateOnly?)snapshot.CapturedDate, cancellationToken);
+
     public async Task<IReadOnlyList<PricingHistoryDailyPointDto>> GetDailySnapshotsAsync(
         string marketHashName,
         string currency,

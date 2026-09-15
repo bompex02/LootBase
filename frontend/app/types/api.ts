@@ -76,3 +76,10 @@ export interface PricingHistory {
   periods: PricingHistoryPeriod[]
   dailyPoints: PricingHistoryDailyPoint[]
 }
+
+export interface PricingPipelineStatus {
+  totalItems: number
+  coveredItems: number
+  remainingItems: number
+  lastDailySnapshotDate?: string | null
+}

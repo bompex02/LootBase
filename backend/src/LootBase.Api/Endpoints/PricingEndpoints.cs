@@ -61,6 +61,18 @@ public static class PricingEndpoints
         })
         .WithTags("Pricing");
 
+        // Public and unauthenticated on purpose: read-only counts, no Steam
+        // calls, nothing sensitive - safe for a monitoring page to poll
+        app.MapGet("/api/pricing/status", async (
+            string? currency,
+            IPricingHistoryProvider pricingHistory,
+            CancellationToken cancellationToken) =>
+        {
+            var status = await pricingHistory.GetPipelineStatusAsync(currency ?? "EUR", cancellationToken);
+            return Results.Ok(status);
+        })
+        .WithTags("Pricing");
+
         app.MapPost("/api/pricing/backfill/{*marketHashName}", async (
             string marketHashName,
             HttpRequest request,
