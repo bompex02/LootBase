@@ -28,7 +28,7 @@ jobs:
       - name: Trigger backfill-batch repeatedly
         id: loop
         run: |
-          deadline=$(( $(date +%s) + 20 ))
+          deadline=$(( $(date +%s) + 5*3600 + 30*60 ))
           round=1
           remaining=1
           while [ "$(date +%s)" -lt "$deadline" ]; do
