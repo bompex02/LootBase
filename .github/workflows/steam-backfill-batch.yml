@@ -9,9 +9,22 @@ jobs:
   backfill:
     runs-on: ubuntu-latest
     steps:
-      - name: Trigger backfill-batch
+      # GitHub throttles a */5 schedule hard on low-traffic repos - real-world
+      # triggers land more like every 1-5h, not every 5 minutes. So each
+      # trigger that does land has to do a lot more work: loop the batch call
+      # instead of relying on trigger frequency we don't control.
+      - name: Trigger backfill-batch repeatedly
         run: |
-          curl --fail --show-error --silent --max-time 280 --retry 2 --retry-delay 15 \
-            -X POST \
-            -H "X-Backfill-Key: ${{ secrets.Steam__MarketBackfillSecret }}" \
-            "https://lootbase-backend.onrender.com/api/pricing/backfill-batch?currency=EUR&batchSize=30"
+          for i in $(seq 1 12); do
+            echo "Round $i"
+            response=$(curl --fail --show-error --silent --max-time 285 --retry 2 --retry-delay 15 \
+              -X POST \
+              -H "X-Backfill-Key: ${{ secrets.Steam__MarketBackfillSecret }}" \
+              "https://lootbase-backend.onrender.com/api/pricing/backfill-batch?currency=EUR&batchSize=55")
+            echo "$response"
+            remaining=$(echo "$response" | jq -r '.remaining')
+            if [ "$remaining" = "0" ]; then
+              echo "Nothing left to backfill."
+              break
+            fi
+          done
