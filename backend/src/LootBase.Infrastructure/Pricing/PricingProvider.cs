@@ -196,6 +196,24 @@ public sealed class PricingProvider(
         return new BackfillBatchResultDto(Processed: batch.Count, Imported: imported, Remaining: remaining);
     }
 
+    public async Task<PricingPipelineStatusDto> GetPipelineStatusAsync(string currency, CancellationToken cancellationToken)
+    {
+        var catalog = await GetCatalogAsync(currency, cancellationToken);
+        var allNames = catalog?.Items.Keys.ToList() ?? [];
+
+        var remaining = allNames.Count == 0
+            ? []
+            : await snapshotStore.GetNextUncoveredItemsAsync(currency, allNames, allNames.Count, cancellationToken);
+
+        var lastSnapshotDate = await snapshotStore.GetLastDailySnapshotDateAsync(currency, cancellationToken);
+
+        return new PricingPipelineStatusDto(
+            TotalItems: allNames.Count,
+            CoveredItems: allNames.Count - remaining.Count,
+            RemainingItems: remaining.Count,
+            LastDailySnapshotDate: lastSnapshotDate);
+    }
+
     public async Task BackfillAllFromSteamAsync(string currency, CancellationToken cancellationToken)
     {
         var catalog = await GetCatalogAsync(currency, cancellationToken);

@@ -39,6 +39,15 @@ public interface IPricingHistoryProvider
         string currency,
         int batchSize,
         CancellationToken cancellationToken);
+
+    // Read-only, no Steam calls - cheap enough to poll from a monitoring page
+    Task<PricingPipelineStatusDto> GetPipelineStatusAsync(string currency, CancellationToken cancellationToken);
 }
 
 public sealed record BackfillBatchResultDto(int Processed, int Imported, int Remaining);
+
+public sealed record PricingPipelineStatusDto(
+    int TotalItems,
+    int CoveredItems,
+    int RemainingItems,
+    DateOnly? LastDailySnapshotDate);
