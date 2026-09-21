@@ -28,6 +28,15 @@ public sealed class ItemPriceSnapshotStore(
     private static DateTimeOffset steamCircuitOpenUntil = DateTimeOffset.MinValue;
     private static int consecutiveSteamFailures;
 
+    // Without this, an item whose Steam call always throws (bad name encoding,
+    // permanently malformed response, ...) never gets a no-data marker and sits
+    // at the front of GetNextUncoveredItemsAsync's result forever - reprocessed
+    // every batch and crowding out items that could actually succeed. A 429
+    // isn't the item's fault (WaitForSteamThrottleAsync already backs off the
+    // whole process for that), so it doesn't count towards this.
+    private const int MaxConsecutiveBulkFailuresBeforeGivingUp = 5;
+    private static readonly ConcurrentDictionary<string, int> ConsecutiveBulkFailuresByItem = new(StringComparer.OrdinalIgnoreCase);
+
     private static bool TryEnterSteamCallWindow()
     {
         lock (SteamThrottleLock)
@@ -273,6 +282,7 @@ public sealed class ItemPriceSnapshotStore(
     {
         if (await HasSufficientCoverageAsync(marketHashName, currency, cancellationToken))
         {
+            ConsecutiveBulkFailuresByItem.TryRemove(marketHashName, out _);
             return new BulkBackfillItemResult(Imported: 0, AlreadyCovered: true);
         }
 
@@ -281,12 +291,34 @@ public sealed class ItemPriceSnapshotStore(
         try
         {
             var imported = await BackfillFromSteamAsync(marketHashName, cancellationToken);
-            return new BulkBackfillItemResult(Imported: imported ?? 0, AlreadyCovered: false);
+            if (imported is null)
+            {
+                // Rate-limited - not this item's fault, don't count it against it.
+                return new BulkBackfillItemResult(Imported: 0, AlreadyCovered: false);
+            }
+
+            ConsecutiveBulkFailuresByItem.TryRemove(marketHashName, out _);
+            return new BulkBackfillItemResult(Imported: imported.Value, AlreadyCovered: false);
         }
         catch (Exception ex)
         {
             RegisterSteamCallError(marketHashName);
-            logger.LogWarning(ex, "Bulk backfill for {MarketHashName} failed.", marketHashName);
+
+            var failures = ConsecutiveBulkFailuresByItem.AddOrUpdate(marketHashName, 1, (_, count) => count + 1);
+            if (failures >= MaxConsecutiveBulkFailuresBeforeGivingUp)
+            {
+                logger.LogWarning(
+                    ex,
+                    "Bulk backfill for {MarketHashName} failed {Failures} times in a row; marking it as no-data so it stops blocking the batch queue.",
+                    marketHashName, failures);
+                await MarkNoSteamDataAsync(marketHashName, cancellationToken);
+                ConsecutiveBulkFailuresByItem.TryRemove(marketHashName, out _);
+            }
+            else
+            {
+                logger.LogWarning(ex, "Bulk backfill for {MarketHashName} failed ({Failures}/{Max}).", marketHashName, failures, MaxConsecutiveBulkFailuresBeforeGivingUp);
+            }
+
             return new BulkBackfillItemResult(Imported: 0, AlreadyCovered: false);
         }
     }
