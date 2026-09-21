@@ -181,6 +181,28 @@ public static class PricingEndpoints
         })
         .WithTags("Pricing");
 
+        app.MapPost("/api/pricing/prune", async (
+            HttpRequest request,
+            string? currency,
+            int? keepDays,
+            IOptions<SteamOptions> steamOptions,
+            IPricingHistoryProvider pricingHistory,
+            CancellationToken cancellationToken) =>
+        {
+            if (!IsAuthorizedForPricingOps(request, steamOptions.Value))
+            {
+                return Results.Unauthorized();
+            }
+
+            var effectiveKeepDays = keepDays is > 0 ? keepDays.Value : 90;
+            var deleted = await pricingHistory.PruneOldSnapshotsAsync(
+                currency ?? "EUR",
+                effectiveKeepDays,
+                cancellationToken);
+            return Results.Ok(new { deleted, keepDays = effectiveKeepDays });
+        })
+        .WithTags("Pricing");
+
         app.MapGet("/api/pricing/backfill-all/status", (
             HttpRequest request,
             IOptions<SteamOptions> steamOptions,
