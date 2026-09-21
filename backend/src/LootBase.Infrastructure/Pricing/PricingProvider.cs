@@ -282,6 +282,9 @@ public sealed class PricingProvider(
         }
     }
 
+    public Task<int> PruneOldSnapshotsAsync(string currency, int keepDays, CancellationToken cancellationToken) =>
+        snapshotStore.PruneOldSnapshotsAsync(currency, keepDays, cancellationToken);
+
     public bool TryStartBulkBackfill()
     {
         lock (BulkBackfillStatusLock)
