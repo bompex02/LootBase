@@ -475,6 +475,16 @@ public sealed class ItemPriceSnapshotStore(
         {
             await dbContext.SaveChangesAsync(cancellationToken);
         }
+        else
+        {
+            // Steam had points, but every date is already taken by a
+            // non-steam row (daily Skinport snapshot / period seed) - the
+            // unique (name, currency, date) index means a "steam" row can
+            // never land on those dates either. Nothing will change on a
+            // retry, so mark it like the no-data case or GetNextUncoveredItemsAsync
+            // picks it again forever.
+            await MarkNoSteamDataAsync(marketHashName, cancellationToken);
+        }
 
         return imported;
     }
