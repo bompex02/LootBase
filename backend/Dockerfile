@@ -11,7 +11,7 @@ RUN dotnet restore backend/src/LootBase.Api/LootBase.Api.csproj
 COPY backend/src backend/src
 RUN dotnet publish backend/src/LootBase.Api/LootBase.Api.csproj -c Release -o /app/publish --no-restore
 
-FROM mcr.microsoft.com/dotnet/aspnet:10.0 AS runtime
+FROM mcr.microsoft.com/dotnet/aspnet:10.0.14 AS runtime
 WORKDIR /app
 
 ENV ASPNETCORE_HTTP_PORTS=5188
