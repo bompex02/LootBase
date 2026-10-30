@@ -1,0 +1,49 @@
+services:
+  - type: web
+    name: lootbase-backend
+    runtime: docker
+    dockerfilePath: ./backend/Dockerfile
+    dockerContext: .
+    plan: free
+    healthCheckPath: /api/health
+    envVars:
+      - key: ASPNETCORE_ENVIRONMENT
+        value: Production
+      # DB is Neon, not a Render-managed database (their free Postgres
+      # expires after 30 days) - set the connection string manually in the
+      # Render dashboard instead of wiring it to `databases:` below.
+      - key: ConnectionStrings__LootBase
+        sync: false
+      # Set these manually in the Render dashboard after the first deploy,
+      # once you know the actual public URLs of both services:
+      - key: Steam__Realm
+        sync: false
+      - key: Steam__ReturnUrl
+        sync: false
+      - key: Steam__FrontendBaseUrl
+        sync: false
+      - key: Steam__WebApiKey
+        sync: false
+      - key: Steam__MarketRefreshToken
+        sync: false
+      - key: Steam__MarketBackfillSecret
+        sync: false
+      - key: Cors__AllowedOrigins__0
+        sync: false
+      # Without this, DataProtection keys fall back to the container's local
+      # disk - lost on every restart, silently breaking anything encrypted
+      # with them (e.g. the stored Steam refresh token)
+      - key: ConnectionStrings__Redis
+        sync: false
+
+  - type: web
+    name: lootbase-frontend
+    runtime: docker
+    dockerfilePath: ./frontend/Dockerfile
+    dockerContext: .
+    plan: free
+    envVars:
+      # Set to the backend service's URL after the first deploy
+      # (Render internal address if available, otherwise its public URL).
+      - key: NUXT_API_BASE
+        sync: false

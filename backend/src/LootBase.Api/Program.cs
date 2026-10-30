@@ -4,6 +4,7 @@ using LootBase.Infrastructure;
 using LootBase.Infrastructure.Persistence;
 using Microsoft.AspNetCore.Authentication.Cookies;
 using Microsoft.AspNetCore.Diagnostics;
+using Microsoft.AspNetCore.HttpOverrides;
 using Microsoft.EntityFrameworkCore;
 
 var builder = WebApplication.CreateBuilder(args);
@@ -84,6 +85,16 @@ using (var scope = app.Services.CreateScope())
         dbContext.Database.Migrate();
     }
 }
+
+// Render (and most PaaS hosts) terminate TLS at the proxy and forward plain
+// HTTP internally - without this, the app thinks every request is HTTP
+var forwardedHeadersOptions = new ForwardedHeadersOptions
+{
+    ForwardedHeaders = ForwardedHeaders.XForwardedFor | ForwardedHeaders.XForwardedProto
+};
+forwardedHeadersOptions.KnownIPNetworks.Clear();
+forwardedHeadersOptions.KnownProxies.Clear();
+app.UseForwardedHeaders(forwardedHeadersOptions);
 
 app.UseExceptionHandler(errorApp =>
 {
