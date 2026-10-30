@@ -15,6 +15,8 @@ Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "LootBase.Infrastructure", "
 EndProject
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "LootBase.Api", "backend\src\LootBase.Api\LootBase.Api.csproj", "{49B1B0F6-B973-495C-8FE9-2F22F3EB70B5}"
 EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "LootBase.PricePrediction", "backend\src\LootBase.PricePrediction\LootBase.PricePrediction.csproj", "{63464A84-9615-4F86-BCFF-98311A9FF5F5}"
+EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
 		Debug|Any CPU = Debug|Any CPU
@@ -73,6 +75,18 @@ Global
 		{49B1B0F6-B973-495C-8FE9-2F22F3EB70B5}.Release|x64.Build.0 = Release|Any CPU
 		{49B1B0F6-B973-495C-8FE9-2F22F3EB70B5}.Release|x86.ActiveCfg = Release|Any CPU
 		{49B1B0F6-B973-495C-8FE9-2F22F3EB70B5}.Release|x86.Build.0 = Release|Any CPU
+		{63464A84-9615-4F86-BCFF-98311A9FF5F5}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{63464A84-9615-4F86-BCFF-98311A9FF5F5}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{63464A84-9615-4F86-BCFF-98311A9FF5F5}.Debug|x64.ActiveCfg = Debug|Any CPU
+		{63464A84-9615-4F86-BCFF-98311A9FF5F5}.Debug|x64.Build.0 = Debug|Any CPU
+		{63464A84-9615-4F86-BCFF-98311A9FF5F5}.Debug|x86.ActiveCfg = Debug|Any CPU
+		{63464A84-9615-4F86-BCFF-98311A9FF5F5}.Debug|x86.Build.0 = Debug|Any CPU
+		{63464A84-9615-4F86-BCFF-98311A9FF5F5}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{63464A84-9615-4F86-BCFF-98311A9FF5F5}.Release|Any CPU.Build.0 = Release|Any CPU
+		{63464A84-9615-4F86-BCFF-98311A9FF5F5}.Release|x64.ActiveCfg = Release|Any CPU
+		{63464A84-9615-4F86-BCFF-98311A9FF5F5}.Release|x64.Build.0 = Release|Any CPU
+		{63464A84-9615-4F86-BCFF-98311A9FF5F5}.Release|x86.ActiveCfg = Release|Any CPU
+		{63464A84-9615-4F86-BCFF-98311A9FF5F5}.Release|x86.Build.0 = Release|Any CPU
 	EndGlobalSection
 	GlobalSection(SolutionProperties) = preSolution
 		HideSolutionNode = FALSE
@@ -83,5 +97,6 @@ Global
 		{DDDA1454-5DA6-4741-93CE-11BC2EAA77B5} = {0F9113EE-888A-26D2-68B0-4A7D0A2A8745}
 		{18ABC2DF-3D18-4425-996D-CE367681CBA0} = {0F9113EE-888A-26D2-68B0-4A7D0A2A8745}
 		{49B1B0F6-B973-495C-8FE9-2F22F3EB70B5} = {0F9113EE-888A-26D2-68B0-4A7D0A2A8745}
+		{63464A84-9615-4F86-BCFF-98311A9FF5F5} = {0F9113EE-888A-26D2-68B0-4A7D0A2A8745}
 	EndGlobalSection
 EndGlobal
