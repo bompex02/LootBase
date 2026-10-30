@@ -87,10 +87,13 @@ using (var scope = app.Services.CreateScope())
 }
 
 // Render (and most PaaS hosts) terminate TLS at the proxy and forward plain
-// HTTP internally - without this, the app thinks every request is HTTP
+// HTTP internally - without this, the app thinks every request is HTTP.
+// Only XForwardedProto is processed (not XForwardedFor): this app never
+// reads RemoteIpAddress for anything, so there's no client-IP header to
+// spoof by trusting an unlisted proxy.
 var forwardedHeadersOptions = new ForwardedHeadersOptions
 {
-    ForwardedHeaders = ForwardedHeaders.XForwardedFor | ForwardedHeaders.XForwardedProto
+    ForwardedHeaders = ForwardedHeaders.XForwardedProto
 };
 forwardedHeadersOptions.KnownIPNetworks.Clear();
 forwardedHeadersOptions.KnownProxies.Clear();
