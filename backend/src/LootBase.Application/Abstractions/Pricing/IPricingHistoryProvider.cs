@@ -42,6 +42,11 @@ public interface IPricingHistoryProvider
 
     // Read-only, no Steam calls - cheap enough to poll from a monitoring page
     Task<PricingPipelineStatusDto> GetPipelineStatusAsync(string currency, CancellationToken cancellationToken);
+
+    // Deletes rows older than keepDays for the given currency. steam_no_data
+    // markers are never deleted (they prevent infinite Steam retries).
+    // Returns the number of rows removed.
+    Task<int> PruneOldSnapshotsAsync(string currency, int keepDays, CancellationToken cancellationToken);
 }
 
 public sealed record BackfillBatchResultDto(int Processed, int Imported, int Remaining);

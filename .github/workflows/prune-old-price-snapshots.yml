@@ -1,0 +1,23 @@
+name: Prune old price snapshots
+
+on:
+  schedule:
+    - cron: "0 2 * * 0"  # Every Sunday at 02:00 UTC (1h before the daily snapshot)
+  workflow_dispatch:
+    inputs:
+      keep_days:
+        description: "Keep snapshots from this many days back (default: 90)"
+        required: false
+        default: "90"
+
+jobs:
+  prune:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Prune snapshots older than keep_days
+        run: |
+          KEEP_DAYS="${{ github.event.inputs.keep_days || '90' }}"
+          curl --fail --show-error --silent --max-time 60 \
+            -X POST \
+            -H "X-Backfill-Key: ${{ secrets.Steam__MarketBackfillSecret }}" \
+            "https://lootbase-backend.onrender.com/api/pricing/prune?currency=EUR&keepDays=${KEEP_DAYS}"

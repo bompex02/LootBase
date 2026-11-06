@@ -372,6 +372,35 @@ public sealed class ItemPriceSnapshotStore(
         await dbContext.SaveChangesAsync(cancellationToken);
     }
 
+    public async Task<int> PruneOldSnapshotsAsync(string currency, int keepDays, CancellationToken cancellationToken)
+    {
+        var cutoff = DateOnly.FromDateTime(DateTime.UtcNow).AddDays(-keepDays);
+        var query = dbContext.ItemPriceSnapshots
+            .Where(snapshot =>
+                snapshot.Currency == currency &&
+                snapshot.CapturedDate < cutoff &&
+                snapshot.Source != NoSteamDataSource);
+
+        int deleted;
+        if (dbContext.Database.IsRelational())
+        {
+            deleted = await query.ExecuteDeleteAsync(cancellationToken);
+        }
+        else
+        {
+            // InMemory provider (used in dev) doesn't support bulk ExecuteDeleteAsync
+            var rows = await query.ToListAsync(cancellationToken);
+            dbContext.ItemPriceSnapshots.RemoveRange(rows);
+            await dbContext.SaveChangesAsync(cancellationToken);
+            deleted = rows.Count;
+        }
+
+        logger.LogInformation(
+            "Pruned {Deleted} ItemPriceSnapshot rows older than {KeepDays} days for {Currency}.",
+            deleted, keepDays, currency);
+        return deleted;
+    }
+
     // A "steam" row counts as real coverage, and so does a confirmed
     // no-data marker - a single Skinport seed anchor would otherwise look
     // "covered" forever and block the real backfill
