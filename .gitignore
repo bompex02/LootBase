@@ -23,6 +23,9 @@ coverage/
 *.dump
 *.sql.gz
 
+# Trained ML models - generated from the DB, not source
+backend/src/LootBase.PricePrediction/*.zip
+
 # Logs
 *.log
 npm-debug.log*

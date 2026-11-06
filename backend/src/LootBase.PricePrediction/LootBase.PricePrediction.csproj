@@ -1,0 +1,20 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <TargetFramework>net10.0</TargetFramework>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Microsoft.ML" />
+    <PackageReference Include="Microsoft.ML.FastTree" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\LootBase.Infrastructure\LootBase.Infrastructure.csproj" />
+    <ProjectReference Include="..\LootBase.Domain\LootBase.Domain.csproj" />
+  </ItemGroup>
+
+</Project>
