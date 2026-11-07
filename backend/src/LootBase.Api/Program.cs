@@ -1,7 +1,9 @@
+using LootBase.Api;
 using LootBase.Api.Endpoints;
 using LootBase.Application;
 using LootBase.Infrastructure;
 using LootBase.Infrastructure.Persistence;
+using LootBase.PricePrediction;
 using Microsoft.AspNetCore.Authentication.Cookies;
 using Microsoft.AspNetCore.Diagnostics;
 using Microsoft.AspNetCore.HttpOverrides;
@@ -12,6 +14,7 @@ var builder = WebApplication.CreateBuilder(args);
 builder.Services.AddApplication();
 builder.Services.AddInfrastructure(builder.Configuration);
 builder.Services.AddOpenApi();
+builder.Services.AddSingleton<PriceTrendModelHolder>();
 
 builder.Services.AddAuthentication(CookieAuthenticationDefaults.AuthenticationScheme)
     .AddCookie(options =>
@@ -83,6 +86,15 @@ using (var scope = app.Services.CreateScope())
     if (dbContext.Database.IsRelational())
     {
         dbContext.Database.Migrate();
+
+        // Trained and uploaded offline via the LootBase.PricePrediction CLI -
+        // no row yet (or no DB at all) just means /api/predictions 503s
+        var artifact = await dbContext.PriceTrendModelArtifacts.FindAsync(1);
+        if (artifact is not null)
+        {
+            scope.ServiceProvider.GetRequiredService<PriceTrendModelHolder>().Model =
+                PriceTrendModel.LoadFromBytes(artifact.Bytes);
+        }
     }
 }
 
@@ -128,5 +140,6 @@ app.MapItemsEndpoints();
 app.MapPricingEndpoints();
 app.MapLeaderboardEndpoints();
 app.MapPlayerEndpoints();
+app.MapPredictionEndpoints();
 
 app.Run();
