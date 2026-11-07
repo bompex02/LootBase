@@ -17,7 +17,7 @@ namespace LootBase.Infrastructure.Persistence.Migrations
         {
 #pragma warning disable 612, 618
             modelBuilder
-                .HasAnnotation("ProductVersion", "10.0.9")
+                .HasAnnotation("ProductVersion", "10.0.13")
                 .HasAnnotation("Relational:MaxIdentifierLength", 63);
 
             NpgsqlModelBuilderExtensions.UseIdentityByDefaultColumns(modelBuilder);
@@ -165,6 +165,23 @@ namespace LootBase.Infrastructure.Persistence.Migrations
                         .IsUnique();
 
                     b.ToTable("ItemPriceSnapshots");
+                });
+
+            modelBuilder.Entity("LootBase.Domain.Pricing.PriceTrendModelArtifact", b =>
+                {
+                    b.Property<int>("Id")
+                        .HasColumnType("integer");
+
+                    b.Property<byte[]>("Bytes")
+                        .IsRequired()
+                        .HasColumnType("bytea");
+
+                    b.Property<DateTime>("TrainedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.HasKey("Id");
+
+                    b.ToTable("PriceTrendModelArtifacts");
                 });
 
             modelBuilder.Entity("LootBase.Domain.Users.User", b =>
