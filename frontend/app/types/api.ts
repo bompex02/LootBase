@@ -77,6 +77,11 @@ export interface PricingHistory {
   dailyPoints: PricingHistoryDailyPoint[]
 }
 
+export interface PricePrediction {
+  goesUp: boolean
+  probability: number
+}
+
 export interface PricingPipelineStatus {
   totalItems: number
   coveredItems: number

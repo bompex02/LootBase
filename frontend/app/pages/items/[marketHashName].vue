@@ -104,7 +104,22 @@
 
       <section class="space-y-3">
         <div class="flex flex-wrap items-center justify-between gap-3">
-          <h2 class="text-lg font-semibold">Preisverlauf</h2>
+          <div class="flex items-center gap-2">
+            <h2 class="text-lg font-semibold">Preisverlauf</h2>
+            <UTooltip v-if="prediction" :text="predictionTooltip">
+              <span
+                class="inline-flex items-center gap-1 rounded-md px-2 py-1 text-xs font-medium"
+                :class="prediction.goesUp ? 'bg-emerald-500/10 text-emerald-400' : 'bg-red-500/10 text-red-400'"
+              >
+                <UIcon
+                  :name="prediction.goesUp ? 'i-lucide-trending-up' : 'i-lucide-trending-down'"
+                  class="size-4"
+                  :class="prediction.goesUp ? 'predict-drift-up' : 'predict-drift-down'"
+                />
+                {{ prediction.goesUp ? 'Steigend' : 'Fallend' }}
+              </span>
+            </UTooltip>
+          </div>
           <div class="flex gap-1 rounded-md border border-zinc-800 bg-[#101821] p-1">
             <button
               v-for="option in durationOptions"
@@ -141,7 +156,7 @@
 </template>
 
 <script setup lang="ts">
-import type { InventoryItem, ItemMetadata, PricingHistory, PricingHistoryPeriodKey, PricingItem } from '~/types/api'
+import type { InventoryItem, ItemMetadata, PricePrediction, PricingHistory, PricingHistoryPeriodKey, PricingItem } from '~/types/api'
 import type { PriceHistoryChartPoint } from '~/components/PriceHistoryChart.vue'
 
 const route = useRoute()
@@ -165,6 +180,23 @@ const { data: history, error: historyError } = await useApiFetch<PricingHistory>
   `/api/pricing/history/${encodeURIComponent(marketHashName.value)}`,
   { query: { currency: ownedItem.value?.currency ?? 'EUR' } }
 )
+
+// Not every item has enough history for a prediction yet (404) or the model
+// might not be deployed (503) - just hide the badge in that case, no toast
+const { data: prediction } = await useApiFetch<PricePrediction>(
+  `/api/predictions/${encodeURIComponent(marketHashName.value)}`,
+  { toastOnError: false }
+)
+
+const predictionTooltip = computed(() => {
+  if (!prediction.value) {
+    return ''
+  }
+
+  const confidence = Math.round(prediction.value.probability * 100)
+  const direction = prediction.value.goesUp ? 'steigt' : 'fällt'
+  return `7-Tage-Prognose: Preis ${direction} (${confidence}% Wahrscheinlichkeit)`
+})
 
 // Chart x-axis order: further back in time (left) to most recent (right)
 const PERIODS_BY_DURATION: Record<PricingHistoryPeriodKey, PricingHistoryPeriodKey[]> = {
@@ -250,3 +282,16 @@ const displayItem = computed(() => {
 
 const rarityColor = computed(() => getRarityColor(displayItem.value?.rarity))
 </script>
+
+<style scoped>
+@keyframes predict-drift-up {
+  0%, 100% { transform: translateY(0); opacity: 1; }
+  50% { transform: translateY(-3px); opacity: 0.6; }
+}
+@keyframes predict-drift-down {
+  0%, 100% { transform: translateY(0); opacity: 1; }
+  50% { transform: translateY(3px); opacity: 0.6; }
+}
+.predict-drift-up { animation: predict-drift-up 1.4s ease-in-out infinite; }
+.predict-drift-down { animation: predict-drift-down 1.4s ease-in-out infinite; }
+</style>
