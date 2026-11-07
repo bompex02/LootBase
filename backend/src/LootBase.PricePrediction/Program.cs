@@ -1,10 +1,7 @@
-using LootBase.Domain.Pricing;
 using LootBase.Infrastructure.Persistence;
 using LootBase.PricePrediction;
 using Microsoft.EntityFrameworkCore;
 
-const int HorizonDays = 7;
-const int TestWindowDays = 10;
 const int CrossValidationFolds = 4;
 
 PriceTrendDataset.SelfCheck();
@@ -30,7 +27,7 @@ if (args is ["predict", var marketHashName])
     return;
 }
 
-var dataset = await PriceTrendDataset.LoadAsync(db, HorizonDays);
+var dataset = await PriceTrendDataset.LoadAsync(db, PriceTrendTraining.HorizonDays);
 
 // Cross-validate first: is the single-split number from before trustworthy,
 // or was it a lucky/unlucky slice of the timeline?
@@ -39,7 +36,7 @@ var accuracies = new List<double>();
 var aucs = new List<double>();
 var fold = 1;
 
-foreach (var (foldTrain, foldTest) in dataset.RollingSplits(TestWindowDays, CrossValidationFolds))
+foreach (var (foldTrain, foldTest) in dataset.RollingSplits(PriceTrendTraining.TestWindowDays, CrossValidationFolds))
 {
     var foldModel = new PriceTrendModel();
     foldModel.Train(foldTrain);
@@ -54,28 +51,13 @@ foreach (var (foldTrain, foldTest) in dataset.RollingSplits(TestWindowDays, Cros
 Console.WriteLine($"Mean accuracy: {accuracies.Average():P2} (stddev {StdDev(accuracies):P2})");
 Console.WriteLine($"Mean AUC:      {aucs.Average():F3} (stddev {StdDev(aucs):F3})");
 
-// Final model for serving: train on everything, held-out test is just the last window
+// Final model for serving: same training + DB upload the Api's retrain
+// endpoint uses, so a local run and a server-triggered run stay identical
 Console.WriteLine("\n--- Final model (trained on all data) ---");
-var (train, test) = dataset.SplitByDate(TestWindowDays);
-var model = new PriceTrendModel();
-model.Train(train);
-model.PrintEvaluation(test);
-model.Save();
-
-// Upload for the Api to pick up - a Docker image doesn't have the file,
-// so Neon is the only way the trained model reaches the server
-var artifact = await db.PriceTrendModelArtifacts.FindAsync(1);
-var bytes = model.SaveToBytes();
-if (artifact is null)
-{
-    db.PriceTrendModelArtifacts.Add(new PriceTrendModelArtifact { Bytes = bytes, TrainedAt = DateTime.UtcNow });
-}
-else
-{
-    artifact.Bytes = bytes;
-    artifact.TrainedAt = DateTime.UtcNow;
-}
-await db.SaveChangesAsync();
+var result = await PriceTrendTraining.RunAsync(db);
+Console.WriteLine($"Train: {result.Train.Count:N0}, Test: {result.Test.Count:N0}");
+result.Model.PrintEvaluation(result.Test);
+result.Model.Save();
 Console.WriteLine("Uploaded model to database.");
 
 static double StdDev(IReadOnlyList<double> values)
