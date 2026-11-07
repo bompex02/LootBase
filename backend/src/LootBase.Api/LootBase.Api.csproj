@@ -19,6 +19,7 @@
     <ProjectReference Include="..\LootBase.Application\LootBase.Application.csproj" />
     <ProjectReference Include="..\LootBase.Infrastructure\LootBase.Infrastructure.csproj" />
     <ProjectReference Include="..\LootBase.Domain\LootBase.Domain.csproj" />
+    <ProjectReference Include="..\LootBase.PricePrediction\LootBase.PricePrediction.csproj" />
   </ItemGroup>
 
 </Project>
