@@ -201,7 +201,8 @@ public static class PricingEndpoints
     // Gates every internal pricing job (backfill + snapshot-all), not just
     // backfill - checks the X-Backfill-Key header against the configured
     // secret; if the secret is not set, no requests are authorized
-    private static bool IsAuthorizedForPricingOps(HttpRequest request, SteamOptions steamOptions)
+    // Internal, not private: PredictionEndpoints reuses the same gate for /api/predictions/retrain
+    internal static bool IsAuthorizedForPricingOps(HttpRequest request, SteamOptions steamOptions)
     {
         var expectedSecret = steamOptions.MarketBackfillSecret;
         var providedSecret = request.Headers["X-Backfill-Key"].ToString();

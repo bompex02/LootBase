@@ -1,7 +1,9 @@
 using System.Text.Json;
+using LootBase.Infrastructure.Auth.Steam;
 using LootBase.Infrastructure.Persistence;
 using LootBase.PricePrediction;
 using Microsoft.Extensions.Caching.Distributed;
+using Microsoft.Extensions.Options;
 
 namespace LootBase.Api.Endpoints;
 
@@ -48,6 +50,35 @@ public static class PredictionEndpoints
             await cache.SetStringAsync(cacheKey, json, CacheOptions, cancellationToken);
 
             return Results.Content(json, "application/json");
+        })
+        .WithTags("Predictions");
+
+        // Meant for a weekly scheduler (GitHub Actions), same auth gate as
+        // the pricing jobs - runs to completion within the request like
+        // snapshot-all, and swaps the live in-memory model immediately so no
+        // redeploy/restart is needed to pick up the retrained one
+        app.MapPost("/api/predictions/retrain", async (
+            HttpRequest request,
+            LootBaseDbContext db,
+            IOptions<SteamOptions> steamOptions,
+            PriceTrendModelHolder modelHolder,
+            CancellationToken cancellationToken) =>
+        {
+            if (!PricingEndpoints.IsAuthorizedForPricingOps(request, steamOptions.Value))
+            {
+                return Results.Unauthorized();
+            }
+
+            var result = await PriceTrendTraining.RunAsync(db, cancellationToken);
+            modelHolder.Model = result.Model;
+
+            return Results.Ok(new
+            {
+                trainedOn = result.Train.Count,
+                testedOn = result.Test.Count,
+                accuracy = result.Metrics.Accuracy,
+                auc = result.Metrics.AreaUnderRocCurve
+            });
         })
         .WithTags("Predictions");
 
