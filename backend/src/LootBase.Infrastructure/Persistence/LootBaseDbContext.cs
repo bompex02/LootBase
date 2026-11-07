@@ -18,6 +18,8 @@ public sealed class LootBaseDbContext(DbContextOptions<LootBaseDbContext> option
 
     public DbSet<SteamMarketCredential> SteamMarketCredentials => Set<SteamMarketCredential>();
 
+    public DbSet<PriceTrendModelArtifact> PriceTrendModelArtifacts => Set<PriceTrendModelArtifact>();
+
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
         modelBuilder.Entity<User>(user =>
@@ -80,6 +82,13 @@ public sealed class LootBaseDbContext(DbContextOptions<LootBaseDbContext> option
             credential.HasKey(x => x.Id);
             credential.Property(x => x.Id).ValueGeneratedNever();
             credential.Property(x => x.RefreshToken).IsRequired();
+        });
+
+        modelBuilder.Entity<PriceTrendModelArtifact>(artifact =>
+        {
+            artifact.HasKey(x => x.Id);
+            artifact.Property(x => x.Id).ValueGeneratedNever();
+            artifact.Property(x => x.Bytes).IsRequired();
         });
     }
 }

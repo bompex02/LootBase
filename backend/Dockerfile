@@ -6,6 +6,7 @@ COPY backend/src/LootBase.Api/LootBase.Api.csproj backend/src/LootBase.Api/
 COPY backend/src/LootBase.Application/LootBase.Application.csproj backend/src/LootBase.Application/
 COPY backend/src/LootBase.Domain/LootBase.Domain.csproj backend/src/LootBase.Domain/
 COPY backend/src/LootBase.Infrastructure/LootBase.Infrastructure.csproj backend/src/LootBase.Infrastructure/
+COPY backend/src/LootBase.PricePrediction/LootBase.PricePrediction.csproj backend/src/LootBase.PricePrediction/
 RUN dotnet restore backend/src/LootBase.Api/LootBase.Api.csproj
 
 COPY backend/src backend/src
