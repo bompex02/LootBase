@@ -1,3 +1,4 @@
+using LootBase.Domain.Pricing;
 using LootBase.Infrastructure.Persistence;
 using LootBase.PricePrediction;
 using Microsoft.EntityFrameworkCore;
@@ -60,6 +61,22 @@ var model = new PriceTrendModel();
 model.Train(train);
 model.PrintEvaluation(test);
 model.Save();
+
+// Upload for the Api to pick up - a Docker image doesn't have the file,
+// so Neon is the only way the trained model reaches the server
+var artifact = await db.PriceTrendModelArtifacts.FindAsync(1);
+var bytes = model.SaveToBytes();
+if (artifact is null)
+{
+    db.PriceTrendModelArtifacts.Add(new PriceTrendModelArtifact { Bytes = bytes, TrainedAt = DateTime.UtcNow });
+}
+else
+{
+    artifact.Bytes = bytes;
+    artifact.TrainedAt = DateTime.UtcNow;
+}
+await db.SaveChangesAsync();
+Console.WriteLine("Uploaded model to database.");
 
 static double StdDev(IReadOnlyList<double> values)
 {

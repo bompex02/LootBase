@@ -48,6 +48,26 @@ public sealed class PriceTrendModel
         return model;
     }
 
+    public byte[] SaveToBytes()
+    {
+        if (trained is null || trainingSchema is null)
+        {
+            throw new InvalidOperationException("Call Train before SaveToBytes.");
+        }
+
+        using var stream = new MemoryStream();
+        ml.Model.Save(trained, trainingSchema, stream);
+        return stream.ToArray();
+    }
+
+    public static PriceTrendModel LoadFromBytes(byte[] bytes)
+    {
+        var model = new PriceTrendModel();
+        using var stream = new MemoryStream(bytes);
+        model.trained = model.ml.Model.Load(stream, out _);
+        return model;
+    }
+
     /// <summary>Predicts whether the price will rise, using today's (or the latest known) features.</summary>
     public TrendPrediction Predict(TrainingSample todayFeatures)
     {
